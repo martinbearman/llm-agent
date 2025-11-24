@@ -3,7 +3,7 @@
 import { DefaultChatTransport } from "ai";
 import { useChat } from "@ai-sdk/react";
 import { Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChatMessage } from "~/components/chat-message";
 import { SignInModal } from "~/components/sign-in-modal";
 
@@ -30,6 +30,14 @@ export const ChatPage = ({ userName, isAuthenticated }: ChatProps) => {
   });
 
   const isLoading = status === "streaming" || status === "submitted";
+
+  useEffect(() => {
+    console.log("ChatPage - All messages:", messages);
+    messages.forEach((message, index) => {
+      console.log(`ChatPage - Message ${index}:`, message);
+      console.log(`ChatPage - Message ${index} parts:`, message.parts);
+    });
+  }, [messages]);
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement>
@@ -62,15 +70,10 @@ export const ChatPage = ({ userName, isAuthenticated }: ChatProps) => {
           aria-label="Chat messages"
         >
           {messages.map((message) => {
-            const textParts = message.parts.filter(
-              (part) => part.type === "text"
-            ) as Array<{ type: "text"; text: string }>;
-            const content = textParts.map((part) => part.text).join("");
             return (
               <ChatMessage
                 key={message.id}
-                text={content}
-                role={message.role}
+                message={message}
                 userName={userName}
               />
             );

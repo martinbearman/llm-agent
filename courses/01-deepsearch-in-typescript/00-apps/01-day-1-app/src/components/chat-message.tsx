@@ -1,8 +1,10 @@
+import type { UIMessage } from "ai";
 import ReactMarkdown, { type Components } from "react-markdown";
 
+export type MessagePart = NonNullable<UIMessage["parts"]>[number];
+
 interface ChatMessageProps {
-  text: string;
-  role: string;
+  message: UIMessage;
   userName: string;
 }
 
@@ -38,8 +40,49 @@ const Markdown = ({ children }: { children: string }) => {
   return <ReactMarkdown components={components}>{children}</ReactMarkdown>;
 };
 
-export const ChatMessage = ({ text, role, userName }: ChatMessageProps) => {
-  const isAI = role === "assistant";
+const ToolInvocation = ({ part }: { part: MessagePart }) => {
+  // Handle different possible structures - log to see what we actually get
+  console.log("ToolInvocation - part:", part);
+  
+  // Try to extract tool information from the part
+  const toolName = "toolName" in part ? part.toolName : part.type.replace("tool-", "");
+  const state = "state" in part ? part.state : "unknown";
+  const args = "args" in part ? part.args : ("input" in part ? part.input : {});
+  const toolCallId = "toolCallId" in part ? part.toolCallId : "";
+  const hasResult = ("output" in part && part.output !== undefined) || ("result" in part && part.result !== undefined);
+  const result = "result" in part ? part.result : ("output" in part ? part.output : undefined);
+
+  return (
+    <div className="mb-4 rounded-lg border border-gray-700 bg-gray-700/50 p-3">
+      <div className="mb-2 flex items-center gap-2">
+        <span className="text-xs font-semibold text-blue-400">Tool Call</span>
+        <span className="text-xs text-gray-400">({state})</span>
+      </div>
+      <div className="mb-2">
+        <span className="text-sm font-medium text-gray-300">Tool:</span>
+        <span className="ml-2 text-sm text-gray-400">{toolName}</span>
+      </div>
+      <div className="mb-2">
+        <span className="text-sm font-medium text-gray-300">Arguments:</span>
+        <pre className="mt-1 overflow-x-auto rounded bg-gray-800 p-2 text-xs">
+          {JSON.stringify(args, null, 2)}
+        </pre>
+      </div>
+      {hasResult && result !== undefined && (
+        <div>
+          <span className="text-sm font-medium text-gray-300">Result:</span>
+          <pre className="mt-1 overflow-x-auto rounded bg-gray-800 p-2 text-xs">
+            {JSON.stringify(result, null, 2)}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export const ChatMessage = ({ message, userName }: ChatMessageProps) => {
+  const isAI = message.role === "assistant";
+  const parts = message.parts ?? [];
 
   return (
     <div className="mb-6">
@@ -53,7 +96,24 @@ export const ChatMessage = ({ text, role, userName }: ChatMessageProps) => {
         </p>
 
         <div className="prose prose-invert max-w-none">
-          <Markdown>{text}</Markdown>
+          {parts.map((part: MessagePart, index: number) => {
+            console.log(`ChatMessage - Part ${index}:`, part);
+            console.log(`ChatMessage - Part ${index} type:`, part.type);
+            if (part.type === "text") {
+              return <Markdown key={index}>{part.text}</Markdown>;
+            }
+            // Check if it's a tool part (could be "tool-invocation" or "tool-{toolName}")
+            if (typeof part.type === "string" && part.type.startsWith("tool-")) {
+              const toolCallId = "toolCallId" in part ? part.toolCallId : `tool-${index}`;
+              return (
+                <ToolInvocation
+                  key={toolCallId}
+                  part={part}
+                />
+              );
+            }
+            return null;
+          })}
         </div>
       </div>
     </div>
