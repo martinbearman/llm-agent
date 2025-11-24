@@ -9,12 +9,24 @@ import { SignInModal } from "~/components/sign-in-modal";
 
 interface ChatProps {
   userName: string;
+  isAuthenticated: boolean;
 }
 
-export const ChatPage = ({ userName }: ChatProps) => {
+export const ChatPage = ({ userName, isAuthenticated }: ChatProps) => {
   const [input, setInput] = useState("");
+  const [showSignInModal, setShowSignInModal] = useState(false);
   const { messages, sendMessage, status } = useChat({
     transport: new DefaultChatTransport({ api: "/api/chat" }),
+    onError: (error) => {
+      // Show sign-in modal if we get a 401 Unauthorized error
+      if (
+        error instanceof Error &&
+        (error.message.includes("401") ||
+          error.message.includes("Unauthorized"))
+      ) {
+        setShowSignInModal(true);
+      }
+    },
   });
 
   const isLoading = status === "streaming" || status === "submitted";
@@ -28,6 +40,12 @@ export const ChatPage = ({ userName }: ChatProps) => {
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
+
+    if (!isAuthenticated) {
+      setShowSignInModal(true);
+      return;
+    }
+
     sendMessage({
       role: "user",
       parts: [{ type: "text", text: input }],
@@ -96,7 +114,10 @@ export const ChatPage = ({ userName }: ChatProps) => {
         </div>
       </div>
 
-      <SignInModal isOpen={false} onClose={() => {}} />
+      <SignInModal
+        isOpen={showSignInModal}
+        onClose={() => setShowSignInModal(false)}
+      />
     </>
   );
 };
