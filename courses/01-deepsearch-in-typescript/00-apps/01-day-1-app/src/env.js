@@ -20,6 +20,7 @@ export const env = createEnv({
     NODE_ENV: z
       .enum(["development", "test", "production"])
       .default("development"),
+    REQUESTS_PER_DAY_LIMIT: z.coerce.number().int().positive().default(25),
   },
 
   /**
@@ -42,6 +43,7 @@ export const env = createEnv({
     GOOGLE_GENERATIVE_AI_API_KEY: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
     SERPER_API_KEY: process.env.SERPER_API_KEY,
     NODE_ENV: process.env.NODE_ENV,
+    REQUESTS_PER_DAY_LIMIT: process.env.REQUESTS_PER_DAY_LIMIT,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially

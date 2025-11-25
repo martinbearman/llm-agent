@@ -37,8 +37,29 @@ export const users = createTable("user", {
   isAdmin: boolean("is_admin").notNull().default(false),
 });
 
+export const requestLogs = createTable(
+  "request_log",
+  {
+    id: serial("id").primaryKey(),
+    userId: varchar("user_id", { length: 255 })
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", {
+      mode: "date",
+      withTimezone: true,
+    })
+      .notNull()
+      .default(sql`CURRENT_TIMESTAMP`),
+  },
+  (requestLog) => ({
+    userIdIdx: index("request_log_user_id_idx").on(requestLog.userId),
+    createdAtIdx: index("request_log_created_at_idx").on(requestLog.createdAt),
+  }),
+);
+
 export const usersRelations = relations(users, ({ many }) => ({
   accounts: many(accounts),
+  requestLogs: many(requestLogs),
 }));
 
 export const accounts = createTable(
@@ -97,6 +118,10 @@ export const sessionsRelations = relations(sessions, ({ one }) => ({
   user: one(users, { fields: [sessions.userId], references: [users.id] }),
 }));
 
+export const requestLogsRelations = relations(requestLogs, ({ one }) => ({
+  user: one(users, { fields: [requestLogs.userId], references: [users.id] }),
+}));
+
 export const verificationTokens = createTable(
   "verification_token",
   {
@@ -126,4 +151,7 @@ export declare namespace DB {
   export type NewVerificationToken = InferInsertModel<
     typeof verificationTokens
   >;
+
+  export type RequestLog = InferSelectModel<typeof requestLogs>;
+  export type NewRequestLog = InferInsertModel<typeof requestLogs>;
 }

@@ -5,6 +5,12 @@ import { z } from "zod";
 import { auth } from "~/server/auth";
 import { model } from "~/model";
 import { searchSerper } from "~/serper";
+import {
+  getDailyRequestCount,
+  getRequestLimitPerDay,
+  getUserById,
+  insertRequestLog,
+} from "~/server/db/queries";
 
 export const maxDuration = 60;
 
@@ -15,11 +21,28 @@ export async function POST(request: Request) {
     return new Response("Unauthorized", { status: 401 });
   }
 
+  const user = await getUserById(session.user.id);
+
+  if (!user) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+
   const body = (await request.json()) as {
     messages: Array<UIMessage>;
   };
 
   const { messages } = body;
+
+  if (!user.isAdmin) {
+    const dailyLimit = getRequestLimitPerDay();
+    const requestCount = await getDailyRequestCount(user.id);
+
+    if (requestCount >= dailyLimit) {
+      return new Response("Too Many Requests", { status: 429 });
+    }
+  }
+
+  await insertRequestLog(user.id);
 
   const modelMessages = convertToModelMessages(messages);
 

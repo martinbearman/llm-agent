@@ -4,6 +4,7 @@ import { DefaultChatTransport } from "ai";
 import { useChat } from "@ai-sdk/react";
 import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { ChatMessage } from "~/components/chat-message";
 import { SignInModal } from "~/components/sign-in-modal";
 
@@ -18,13 +19,19 @@ export const ChatPage = ({ userName, isAuthenticated }: ChatProps) => {
   const { messages, sendMessage, status } = useChat({
     transport: new DefaultChatTransport({ api: "/api/chat" }),
     onError: (error) => {
+      const errorMessage = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+      
       // Show sign-in modal if we get a 401 Unauthorized error
-      if (
-        error instanceof Error &&
-        (error.message.includes("401") ||
-          error.message.includes("Unauthorized"))
-      ) {
+      if (errorMessage.includes("401") || errorMessage.includes("unauthorized")) {
         setShowSignInModal(true);
+        return;
+      }
+      
+      // Show toast if we get a 429 Too Many Requests error
+      if (errorMessage.includes("429") || errorMessage.includes("too many requests")) {
+        toast.error("Rate limit exceeded", {
+          description: "You've reached your daily request limit. Please try again tomorrow.",
+        });
       }
     },
   });
