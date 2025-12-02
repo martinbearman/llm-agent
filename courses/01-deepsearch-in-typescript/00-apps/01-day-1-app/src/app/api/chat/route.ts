@@ -1,5 +1,4 @@
 import type { UIMessage } from "ai";
-
 import { convertToModelMessages, streamText, stepCountIs } from "ai";
 import { z } from "zod";
 import { auth } from "~/server/auth";
@@ -10,11 +9,60 @@ import {
   getRequestLimitPerDay,
   getUserById,
   insertRequestLog,
+  upsertChat,
 } from "~/server/db/queries";
+
+function appendResponseMessages({
+  messages,
+  responseMessages,
+}: {
+  messages: UIMessage[];
+  // `response.messages` from `streamText` is compatible with `UIMessage[]` for our use.
+  responseMessages: UIMessage[];
+}): UIMessage[] {
+  return [...messages, ...responseMessages];
+}
 
 export const maxDuration = 60;
 
+function normalizeMessage(message: UIMessage): UIMessage {
+  if (message.parts && message.parts.length > 0) {
+    return message;
+  }
+
+  // Some SDK messages may populate `content` instead of `parts`.
+  // `content` can be:
+  // - a string
+  // - an array of text/tool parts (newer SDKs)
+  // Normalize both into `parts`.
+  // @ts-expect-error `content` may exist on the underlying message type.
+  const content = message.content;
+
+  if (typeof content === "string" && content.trim().length > 0) {
+    return {
+      ...message,
+      parts: [{ type: "text", text: content }],
+    };
+  }
+
+  if (Array.isArray(content) && content.length > 0) {
+    return {
+      ...message,
+      // We trust the SDK's content parts shape here.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      parts: content as any,
+    };
+  }
+
+  // Fallback: store an empty parts array instead of `null`.
+  return {
+    ...message,
+    parts: [],
+  };
+}
+
 export async function POST(request: Request) {
+
   const session = await auth();
 
   if (!session?.user) {
@@ -29,9 +77,41 @@ export async function POST(request: Request) {
 
   const body = (await request.json()) as {
     messages: Array<UIMessage>;
+    chatId?: string;
   };
 
-  const { messages } = body;
+  const rawMessages = body.messages;
+  const chatId = body.chatId;
+
+  // Ensure all incoming messages have non-null `parts` before we touch the DB.
+  const messages = rawMessages.map(normalizeMessage);
+
+  const effectiveChatId = chatId ?? crypto.randomUUID();
+
+  const getChatTitleFromMessages = (allMessages: Array<UIMessage>): string => {
+    const firstUserMessage = allMessages.find(
+      (message) => message.role === "user",
+    );
+
+    if (!firstUserMessage) {
+      return "New Chat";
+    }
+
+    // Messages in this app use parts with text content
+    const textPart = firstUserMessage.parts?.find(
+      (part) => part.type === "text" && "text" in part,
+    ) as { type: "text"; text: string } | undefined;
+
+    const titleText = textPart?.text.trim();
+
+    if (!titleText) {
+      return "New Chat";
+    }
+
+    return titleText.length > 100
+      ? `${titleText.slice(0, 100)}...`
+      : titleText;
+  };
 
   if (!user.isAdmin) {
     const dailyLimit = getRequestLimitPerDay();
@@ -43,6 +123,19 @@ export async function POST(request: Request) {
   }
 
   await insertRequestLog(user.id);
+
+  // If this is a brand new chat (no chatId provided), create it immediately
+  // so that we have it persisted even if the stream is cancelled or fails.
+  if (!chatId) {
+    const initialTitle = getChatTitleFromMessages(messages);
+
+    await upsertChat({
+      userId: user.id,
+      chatId: effectiveChatId,
+      title: initialTitle,
+      messages,
+    });
+  }
 
   const modelMessages = convertToModelMessages(messages);
 
@@ -74,6 +167,31 @@ When answering questions, you should:
           }));
         },
       },
+    },
+    onFinish: async ({ response }) => {
+      const rawResponseMessages = response.messages as unknown as UIMessage[];
+
+      // Ensure all response messages have non-null `parts` so they can be
+      // safely persisted to the database (the `parts` column is non-nullable).
+      const responseMessages: UIMessage[] = rawResponseMessages.map(
+        normalizeMessage,
+      );
+
+      const updatedMessages = appendResponseMessages({
+        messages,
+        responseMessages,
+      });
+
+      const title = getChatTitleFromMessages(updatedMessages);
+
+      // Save the entire chat message history by replacing all existing messages
+      // with the updated messages array for this chat.
+      await upsertChat({
+        userId: user.id,
+        chatId: effectiveChatId,
+        title,
+        messages: updatedMessages,
+      });
     },
   });
 
