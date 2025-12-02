@@ -77,11 +77,11 @@ export async function POST(request: Request) {
 
   const body = (await request.json()) as {
     messages: Array<UIMessage>;
-    chatId?: string;
+    id?: string;
   };
 
   const rawMessages = body.messages;
-  const chatId = body.chatId;
+  const chatId = body.id;
 
   // Ensure all incoming messages have non-null `parts` before we touch the DB.
   const messages = rawMessages.map(normalizeMessage);

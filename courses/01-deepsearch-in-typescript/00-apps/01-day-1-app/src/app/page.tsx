@@ -1,22 +1,40 @@
+import type { UIMessage } from "ai";
 import { PlusIcon } from "lucide-react";
 import Link from "next/link";
 import { auth } from "~/server/auth/index.ts";
 import { ChatPage } from "./chat.tsx";
 import { AuthButton } from "../components/auth-button.tsx";
+import { getChat, getChats } from "~/server/db/queries.ts";
 
-const chats = [
-  {
-    id: "1",
-    title: "My First Chat",
-  },
-];
+interface HomePageProps {
+  searchParams?: {
+    id?: string;
+  };
+}
 
-const activeChatId = "1";
-
-export default async function HomePage() {
+export default async function HomePage({ searchParams }: HomePageProps) {
   const session = await auth();
   const userName = session?.user?.name ?? "Guest";
   const isAuthenticated = !!session?.user;
+  const userId = session?.user?.id;
+
+  const activeChatId = searchParams?.id;
+
+  const chats = userId ? await getChats(userId) : [];
+
+  const activeChat =
+    activeChatId && userId ? await getChat(activeChatId, userId) : null;
+
+  const initialMessages: UIMessage[] =
+    activeChat?.messages?.map((msg) => ({
+      id: msg.id,
+      role: msg.role as "user" | "assistant",
+      parts: msg.parts as UIMessage["parts"],
+      // content is not persisted, so we can safely pass an empty string,
+      // because parts are always present, and the AI SDK will use the parts
+      // to construct the content
+      content: "",
+    })) ?? [];
 
   return (
     <div className="flex h-screen bg-gray-950">
@@ -41,7 +59,7 @@ export default async function HomePage() {
             chats.map((chat) => (
               <div key={chat.id} className="flex items-center gap-2">
                 <Link
-                  href={`/?chatId=${chat.id}`}
+                  href={`/?id=${chat.id}`}
                   className={`flex-1 rounded-lg p-3 text-left text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-400 ${
                     chat.id === activeChatId
                       ? "bg-gray-700"
@@ -68,7 +86,12 @@ export default async function HomePage() {
         </div>
       </div>
 
-      <ChatPage userName={userName} isAuthenticated={isAuthenticated} />
+      <ChatPage
+        userName={userName}
+        isAuthenticated={isAuthenticated}
+        initialMessages={initialMessages}
+        existingChatId={activeChatId}
+      />
     </div>
   );
 }

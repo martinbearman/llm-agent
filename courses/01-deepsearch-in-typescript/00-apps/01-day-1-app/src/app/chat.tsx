@@ -1,9 +1,10 @@
-"use client";
+ "use client";
 
 import { DefaultChatTransport } from "ai";
 import { useChat } from "@ai-sdk/react";
 import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ChatMessage } from "~/components/chat-message";
 import { SignInModal } from "~/components/sign-in-modal";
@@ -11,27 +12,62 @@ import { SignInModal } from "~/components/sign-in-modal";
 interface ChatProps {
   userName: string;
   isAuthenticated: boolean;
+  // We intentionally type this as `unknown` here to avoid coupling the client
+  // component to the server-side `UIMessage` type while still allowing
+  // `useChat` to hydrate from the initial state.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  initialMessages: any[];
+  existingChatId?: string;
 }
 
-export const ChatPage = ({ userName, isAuthenticated }: ChatProps) => {
+export const ChatPage = ({
+  userName,
+  isAuthenticated,
+  initialMessages,
+  existingChatId,
+}: ChatProps) => {
+  const router = useRouter();
   const [input, setInput] = useState("");
   const [showSignInModal, setShowSignInModal] = useState(false);
+  const [hasRedirected, setHasRedirected] = useState(false);
+
+  const [localChatId] = useState(() => crypto.randomUUID());
+  const effectiveChatId = existingChatId ?? localChatId;
+  const isExistingChat = Boolean(existingChatId);
+
   const { messages, sendMessage, status } = useChat({
     transport: new DefaultChatTransport({ api: "/api/chat" }),
+    // `initialMessages` is passed via the transport's initial config so that
+    // the client can render server-fetched messages on first load.
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    messages: initialMessages,
+    id: effectiveChatId,
     onError: (error) => {
-      const errorMessage = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
-      
+      const errorMessage =
+        error instanceof Error
+          ? error.message.toLowerCase()
+          : String(error).toLowerCase();
+
       // Show sign-in modal if we get a 401 Unauthorized error
       if (errorMessage.includes("401") || errorMessage.includes("unauthorized")) {
         setShowSignInModal(true);
         return;
       }
-      
+
       // Show toast if we get a 429 Too Many Requests error
       if (errorMessage.includes("429") || errorMessage.includes("too many requests")) {
         toast.error("Rate limit exceeded", {
           description: "You've reached your daily request limit. Please try again tomorrow.",
         });
+      }
+    },
+    onFinish: () => {
+      // For brand new chats (no chatId from the URL), redirect to `/?id=...`
+      // after the first assistant response so the sidebar and server state
+      // stay in sync.
+      if (!isExistingChat && !hasRedirected) {
+        setHasRedirected(true);
+        router.push(`/?id=${effectiveChatId}`);
       }
     },
   });
@@ -46,9 +82,7 @@ export const ChatPage = ({ userName, isAuthenticated }: ChatProps) => {
     });
   }, [messages]);
 
-  const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInput(e.target.value);
   };
 
@@ -76,6 +110,11 @@ export const ChatPage = ({ userName, isAuthenticated }: ChatProps) => {
           role="log"
           aria-label="Chat messages"
         >
+          {!isExistingChat && isLoading && !hasRedirected && (
+            <div className="mb-3 text-center text-xs text-gray-500">
+              Creating a new chat&hellip;
+            </div>
+          )}
           {messages.map((message) => {
             return (
               <ChatMessage
