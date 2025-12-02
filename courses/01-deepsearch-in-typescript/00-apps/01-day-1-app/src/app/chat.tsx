@@ -17,31 +17,44 @@ interface ChatProps {
   // `useChat` to hydrate from the initial state.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   initialMessages: any[];
-  existingChatId?: string;
+  chatId: string;
+  isNewChat: boolean;
 }
 
 export const ChatPage = ({
   userName,
   isAuthenticated,
   initialMessages,
-  existingChatId,
+  chatId,
+  isNewChat,
 }: ChatProps) => {
   const router = useRouter();
   const [input, setInput] = useState("");
   const [showSignInModal, setShowSignInModal] = useState(false);
   const [hasRedirected, setHasRedirected] = useState(false);
 
-  const [localChatId] = useState(() => crypto.randomUUID());
-  const effectiveChatId = existingChatId ?? localChatId;
-  const isExistingChat = Boolean(existingChatId);
-
   const { messages, sendMessage, status } = useChat({
-    transport: new DefaultChatTransport({ api: "/api/chat" }),
+    transport: new DefaultChatTransport({
+      api: "/api/chat",
+      fetch: async (url, options) => {
+        const body = options?.body
+          ? JSON.parse(options.body as string)
+          : {};
+        return fetch(url, {
+          ...options,
+          body: JSON.stringify({
+            ...body,
+            chatId,
+            isNewChat,
+          }),
+        });
+      },
+    }),
     // `initialMessages` is passed via the transport's initial config so that
     // the client can render server-fetched messages on first load.
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     messages: initialMessages,
-    id: effectiveChatId,
+    id: chatId,
     onError: (error) => {
       const errorMessage =
         error instanceof Error
@@ -62,12 +75,14 @@ export const ChatPage = ({
       }
     },
     onFinish: () => {
-      // For brand new chats (no chatId from the URL), redirect to `/?id=...`
+      // For brand new chats, redirect to `/?id=...`
       // after the first assistant response so the sidebar and server state
       // stay in sync.
-      if (!isExistingChat && !hasRedirected) {
+      if (isNewChat && !hasRedirected) {
         setHasRedirected(true);
-        router.push(`/?id=${effectiveChatId}`);
+        router.push(`/?id=${chatId}`);
+        // Refresh the server component to update the sidebar with the new chat
+        router.refresh();
       }
     },
   });
@@ -110,7 +125,7 @@ export const ChatPage = ({
           role="log"
           aria-label="Chat messages"
         >
-          {!isExistingChat && isLoading && !hasRedirected && (
+          {isNewChat && isLoading && !hasRedirected && (
             <div className="mb-3 text-center text-xs text-gray-500">
               Creating a new chat&hellip;
             </div>

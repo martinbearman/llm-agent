@@ -18,12 +18,15 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const isAuthenticated = !!session?.user;
   const userId = session?.user?.id;
 
-  const activeChatId = searchParams?.id;
+  const chatIdFromUrl = searchParams?.id;
 
   const chats = userId ? await getChats(userId) : [];
 
+  const chatId = chatIdFromUrl ?? crypto.randomUUID();
+  const isNewChat = !chatIdFromUrl;
+
   const activeChat =
-    activeChatId && userId ? await getChat(activeChatId, userId) : null;
+    chatIdFromUrl && userId ? await getChat(chatIdFromUrl, userId) : null;
 
   const initialMessages: UIMessage[] =
     activeChat?.messages?.map((msg) => ({
@@ -61,7 +64,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                 <Link
                   href={`/?id=${chat.id}`}
                   className={`flex-1 rounded-lg p-3 text-left text-sm text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-400 ${
-                    chat.id === activeChatId
+                    chat.id === chatIdFromUrl
                       ? "bg-gray-700"
                       : "hover:bg-gray-750 bg-gray-800"
                   }`}
@@ -87,10 +90,12 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       </div>
 
       <ChatPage
+        key={chatId}
         userName={userName}
         isAuthenticated={isAuthenticated}
         initialMessages={initialMessages}
-        existingChatId={activeChatId}
+        chatId={chatId}
+        isNewChat={isNewChat}
       />
     </div>
   );

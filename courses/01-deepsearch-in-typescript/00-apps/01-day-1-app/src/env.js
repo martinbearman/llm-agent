@@ -20,7 +20,7 @@ export const env = createEnv({
     NODE_ENV: z
       .enum(["development", "test", "production"])
       .default("development"),
-    REQUESTS_PER_DAY_LIMIT: z.coerce.number().int().positive().default(25),
+    REQUESTS_PER_DAY_LIMIT: z.coerce.number().int().nonnegative().default(25),
   },
 
   /**

@@ -77,16 +77,16 @@ export async function POST(request: Request) {
 
   const body = (await request.json()) as {
     messages: Array<UIMessage>;
-    id?: string;
+    chatId: string;
+    isNewChat: boolean;
   };
 
   const rawMessages = body.messages;
-  const chatId = body.id;
+  const chatId = body.chatId;
+  const isNewChat = body.isNewChat;
 
   // Ensure all incoming messages have non-null `parts` before we touch the DB.
   const messages = rawMessages.map(normalizeMessage);
-
-  const effectiveChatId = chatId ?? crypto.randomUUID();
 
   const getChatTitleFromMessages = (allMessages: Array<UIMessage>): string => {
     const firstUserMessage = allMessages.find(
@@ -115,23 +115,27 @@ export async function POST(request: Request) {
 
   if (!user.isAdmin) {
     const dailyLimit = getRequestLimitPerDay();
-    const requestCount = await getDailyRequestCount(user.id);
+    
+    // If limit is 0, allow unlimited requests
+    if (dailyLimit > 0) {
+      const requestCount = await getDailyRequestCount(user.id);
 
-    if (requestCount >= dailyLimit) {
-      return new Response("Too Many Requests", { status: 429 });
+      if (requestCount >= dailyLimit) {
+        return new Response("Too Many Requests", { status: 429 });
+      }
     }
   }
 
   await insertRequestLog(user.id);
 
-  // If this is a brand new chat (no chatId provided), create it immediately
+  // If this is a brand new chat, create it immediately
   // so that we have it persisted even if the stream is cancelled or fails.
-  if (!chatId) {
+  if (isNewChat) {
     const initialTitle = getChatTitleFromMessages(messages);
 
     await upsertChat({
       userId: user.id,
-      chatId: effectiveChatId,
+      chatId,
       title: initialTitle,
       messages,
     });
@@ -188,7 +192,7 @@ When answering questions, you should:
       // with the updated messages array for this chat.
       await upsertChat({
         userId: user.id,
-        chatId: effectiveChatId,
+        chatId,
         title,
         messages: updatedMessages,
       });
