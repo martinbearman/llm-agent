@@ -178,6 +178,7 @@ When answering questions, you should:
         },
       },
     },
+    experimental_telemetry: { isEnabled: true },
     onFinish: async ({ response }) => {
       const rawResponseMessages = response.messages as unknown as UIMessage[];
 
