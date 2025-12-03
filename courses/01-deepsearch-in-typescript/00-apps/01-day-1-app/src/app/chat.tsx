@@ -6,6 +6,7 @@ import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { StickToBottom } from "use-stick-to-bottom";
 import { ChatMessage } from "~/components/chat-message";
 import { SignInModal } from "~/components/sign-in-modal";
 
@@ -80,9 +81,9 @@ export const ChatPage = ({
       // stay in sync.
       if (isNewChat && !hasRedirected) {
         setHasRedirected(true);
-        router.push(`/?id=${chatId}`);
-        // Refresh the server component to update the sidebar with the new chat
-        router.refresh();
+        // Use a full page reload to ensure the server component refreshes
+        // and the new chat appears in the sidebar
+        window.location.href = `/?id=${chatId}`;
       }
     },
   });
@@ -120,32 +121,36 @@ export const ChatPage = ({
   return (
     <>
       <div className="flex flex-1 flex-col">
-        <div
-          className="mx-auto w-full max-w-[65ch] flex-1 overflow-y-auto p-4 scrollbar-thin scrollbar-track-gray-800 scrollbar-thumb-gray-600 hover:scrollbar-thumb-gray-500"
+        <StickToBottom
+          className="mx-auto w-full max-w-[65ch] flex-1 overflow-y-auto p-4 [&>div]:scrollbar-thin [&>div]:scrollbar-track-gray-800 [&>div]:scrollbar-thumb-gray-600 [&>div]:hover:scrollbar-thumb-gray-500"
+          resize="smooth"
+          initial="smooth"
           role="log"
           aria-label="Chat messages"
         >
-          {isNewChat && isLoading && !hasRedirected && (
-            <div className="mb-3 text-center text-xs text-gray-500">
-              Creating a new chat&hellip;
-            </div>
-          )}
-          {messages.map((message) => {
-            return (
-              <ChatMessage
-                key={message.id}
-                message={message}
-                userName={userName}
-              />
-            );
-          })}
-          {isLoading && (
-            <div className="mb-6 flex items-center gap-2 rounded-lg bg-gray-800 p-4 text-gray-400">
-              <Loader2 className="size-5 animate-spin" />
-              <span>AI is thinking...</span>
-            </div>
-          )}
-        </div>
+          <StickToBottom.Content className="flex flex-col gap-4">
+            {isNewChat && isLoading && !hasRedirected && (
+              <div className="mb-3 text-center text-xs text-gray-500">
+                Creating a new chat&hellip;
+              </div>
+            )}
+            {messages.map((message) => {
+              return (
+                <ChatMessage
+                  key={message.id}
+                  message={message}
+                  userName={userName}
+                />
+              );
+            })}
+            {isLoading && (
+              <div className="mb-6 flex items-center gap-2 rounded-lg bg-gray-800 p-4 text-gray-400">
+                <Loader2 className="size-5 animate-spin" />
+                <span>AI is thinking...</span>
+              </div>
+            )}
+          </StickToBottom.Content>
+        </StickToBottom>
 
         <div className="border-t border-gray-700">
           <form

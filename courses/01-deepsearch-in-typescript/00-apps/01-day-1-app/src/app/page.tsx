@@ -7,9 +7,9 @@ import { AuthButton } from "../components/auth-button.tsx";
 import { getChat, getChats } from "~/server/db/queries.ts";
 
 interface HomePageProps {
-  searchParams?: {
+  searchParams?: Promise<{
     id?: string;
-  };
+  }>;
 }
 
 export default async function HomePage({ searchParams }: HomePageProps) {
@@ -18,7 +18,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const isAuthenticated = !!session?.user;
   const userId = session?.user?.id;
 
-  const chatIdFromUrl = searchParams?.id;
+  const resolvedSearchParams = await searchParams;
+  const chatIdFromUrl = resolvedSearchParams?.id;
 
   const chats = userId ? await getChats(userId) : [];
 

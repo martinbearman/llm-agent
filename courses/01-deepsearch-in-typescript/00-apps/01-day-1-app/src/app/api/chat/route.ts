@@ -141,7 +141,13 @@ export async function POST(request: Request) {
     });
   }
 
-  const modelMessages = convertToModelMessages(messages);
+  // Filter out tool role messages - convertToModelMessages doesn't support them,
+  // and the SDK will reconstruct tool calls from assistant messages automatically
+  const messagesWithoutTool = messages.filter(
+    (message) => (message.role as string) !== "tool",
+  );
+
+  const modelMessages = convertToModelMessages(messagesWithoutTool);
 
   const result = streamText({
     model,
