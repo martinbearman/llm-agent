@@ -1,6 +1,8 @@
 import type { UIMessage } from "ai";
 import { convertToModelMessages, streamText, stepCountIs } from "ai";
 import { z } from "zod";
+import { Langfuse } from "langfuse";
+import { env } from "~/env";
 import { auth } from "~/server/auth";
 import { model } from "~/model";
 import { searchSerper } from "~/serper";
@@ -11,6 +13,10 @@ import {
   insertRequestLog,
   upsertChat,
 } from "~/server/db/queries";
+
+const langfuse = new Langfuse({
+  environment: env.NODE_ENV,
+});
 
 function appendResponseMessages({
   messages,
@@ -149,6 +155,12 @@ export async function POST(request: Request) {
 
   const modelMessages = convertToModelMessages(messagesWithoutTool);
 
+  const trace = langfuse.trace({
+    sessionId: chatId,
+    name: "chat",
+    userId: session.user.id,
+  });
+
   const result = streamText({
     model,
     messages: modelMessages,
@@ -178,7 +190,13 @@ When answering questions, you should:
         },
       },
     },
-    experimental_telemetry: { isEnabled: true },
+    experimental_telemetry: {
+      isEnabled: true,
+      functionId: "agent",
+      metadata: {
+        langfuseTraceId: trace.id,
+      },
+    },
     onFinish: async ({ response }) => {
       const rawResponseMessages = response.messages as unknown as UIMessage[];
 
@@ -203,6 +221,8 @@ When answering questions, you should:
         title,
         messages: updatedMessages,
       });
+
+      await langfuse.flushAsync();
     },
   });
 
