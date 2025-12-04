@@ -52,11 +52,48 @@ const ToolInvocation = ({ part }: { part: MessagePart }) => {
   const hasResult = ("output" in part && part.output !== undefined) || ("result" in part && part.result !== undefined);
   const result = "result" in part ? part.result : ("output" in part ? part.output : undefined);
 
+  // Heuristically detect PDF / HTML sources for the scrapePages tool
+  let hasPdfSource = false;
+  let hasHtmlSource = false;
+
+  if (toolName === "scrapePages" && hasResult && result && typeof result === "object") {
+    const typedResult = result as {
+      success?: boolean;
+      results?: { url: string; result: { success: boolean; sourceType?: "html" | "pdf" } }[];
+    };
+
+    const items = typedResult.results ?? [];
+    for (const item of items) {
+      const sourceType = item.result && "sourceType" in item.result ? item.result.sourceType : undefined;
+      if (sourceType === "pdf") {
+        hasPdfSource = true;
+      }
+      if (sourceType === "html") {
+        hasHtmlSource = true;
+      }
+    }
+  }
+
   return (
     <div className="mb-4 rounded-lg border border-gray-700 bg-gray-700/50 p-3">
       <div className="mb-2 flex items-center gap-2">
         <span className="text-xs font-semibold text-blue-400">Tool Call</span>
         <span className="text-xs text-gray-400">({state})</span>
+
+        {toolName === "scrapePages" && (
+          <div className="ml-auto flex items-center gap-1">
+            {hasPdfSource && (
+              <span className="rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-blue-300">
+                PDF
+              </span>
+            )}
+            {hasHtmlSource && (
+              <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-300">
+                Web
+              </span>
+            )}
+          </div>
+        )}
       </div>
       <div className="mb-2">
         <span className="text-sm font-medium text-gray-300">Tool:</span>

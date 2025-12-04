@@ -6,6 +6,7 @@ import { env } from "~/env";
 import { auth } from "~/server/auth";
 import { model } from "~/model";
 import { searchSerper } from "~/serper";
+import { crawlMultipleUrls } from "~/server/scraper";
 import {
   getDailyRequestCount,
   getRequestLimitPerDay,
@@ -165,12 +166,16 @@ export async function POST(request: Request) {
     model,
     messages: modelMessages,
     stopWhen: stepCountIs(10),
-    system: `You are a helpful AI assistant with access to web search capabilities. 
-When answering questions, you should:
+    system: `You are a helpful AI assistant with access to web search and web scraping capabilities.
+When answering questions, you must:
 - Always use the searchWeb tool to find current and accurate information
+- Always use the scrapePages tool on a diverse set of high-signal URLs (for example, the top 4–6 results from searchWeb), ideally from different domains, to retrieve the full page content in markdown before composing your final answer
+- When selecting URLs for scrapePages, prefer diversity of sources (e.g. news sites, blogs, documentation, reference sites) rather than multiple pages from the same domain, unless the topic is highly specialized
+- If there are many relevant results, choose 4–6 URLs to scrape in a single scrapePages call; if fewer are available, scrape all that are clearly relevant
 - Cite your sources with inline links using markdown format: [source text](url)
-- Provide comprehensive answers based on the search results
-- If the user asks about current events, recent information, or anything that requires up-to-date data, you must use the search tool`,
+- Provide comprehensive answers based on both the search results and the scraped page content
+- If the user asks about current events, recent information, or anything that requires up-to-date data, you must use the searchWeb tool and then use scrapePages on at least one relevant result, preferably 4–6 diverse URLs when available
+- Respect that scrapePages may return errors when a site cannot be crawled (for example due to robots.txt); in that case, explain this limitation to the user and fall back to other available information`,
     tools: {
       searchWeb: {
         inputSchema: z.object({
@@ -187,6 +192,39 @@ When answering questions, you should:
             link: result.link,
             snippet: result.snippet,
           }));
+        },
+      },
+      scrapePages: {
+        inputSchema: z.object({
+          urls: z
+            .array(z.string().url())
+            .min(1)
+            .describe("A list of absolute URLs to fetch and convert to markdown"),
+        }),
+        execute: async ({ urls }) => {
+          const crawlResult = await crawlMultipleUrls(urls);
+
+          // Always return the full structured crawl result so the model
+          // can see both successes and errors, and additionally provide
+          // a flattened `sources` array that is easy for the UI to consume.
+          const sources =
+            crawlResult.success === true
+              ? crawlResult.results.map(({ url, result }) => ({
+                  url,
+                  content: result.data,
+                  sourceType: result.sourceType,
+                }))
+              : crawlResult.results.map(({ url, result }) => ({
+                  url,
+                  content: result.success ? result.data : null,
+                  // Only successful crawls will have a `sourceType`
+                  sourceType: result.success ? result.sourceType : null,
+                }));
+
+          return {
+            ...crawlResult,
+            sources,
+          };
         },
       },
     },
