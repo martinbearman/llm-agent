@@ -45,17 +45,41 @@ export async function insertRequestLog(userId: string) {
   await db.insert(requestLogs).values({ userId });
 }
 
-export const upsertChat = async (opts: {
-  userId: string;
-  chatId: string;
-  title: string;
-  messages: UIMessage[];
-}) => {
+export const upsertChat = async (
+  opts: {
+    userId: string;
+    chatId: string;
+    title: string;
+    messages: UIMessage[];
+  },
+  trace?: {
+    span: (opts: {
+      name: string;
+      input: Record<string, unknown>;
+    }) => {
+      end: (opts: { output: Record<string, unknown> }) => void;
+    };
+  },
+) => {
   const { userId, chatId, title, messages: messageList } = opts;
 
   // Check if chat exists (regardless of user)
+  const findChatSpan = trace?.span({
+    name: "find-chat-by-id",
+    input: {
+      chatId,
+    },
+  });
+
   const existingChat = await db.query.chats.findFirst({
     where: eq(chats.id, chatId),
+  });
+
+  findChatSpan?.end({
+    output: {
+      found: !!existingChat,
+      userId: existingChat?.userId ?? null,
+    },
   });
 
   if (existingChat) {
@@ -67,9 +91,30 @@ export const upsertChat = async (opts: {
     }
 
     // Chat exists and belongs to user - delete all existing messages
+    const deleteMessagesSpan = trace?.span({
+      name: "delete-chat-messages",
+      input: {
+        chatId,
+      },
+    });
+
     await db.delete(messages).where(eq(messages.chatId, chatId));
 
+    deleteMessagesSpan?.end({
+      output: {
+        success: true,
+      },
+    });
+
     // Update chat title and updatedAt
+    const updateChatSpan = trace?.span({
+      name: "update-chat",
+      input: {
+        chatId,
+        title,
+      },
+    });
+
     await db
       .update(chats)
       .set({
@@ -77,8 +122,23 @@ export const upsertChat = async (opts: {
         updatedAt: new Date(),
       })
       .where(eq(chats.id, chatId));
+
+    updateChatSpan?.end({
+      output: {
+        success: true,
+      },
+    });
   } else {
     // Create new chat
+    const insertChatSpan = trace?.span({
+      name: "insert-chat",
+      input: {
+        chatId,
+        userId,
+        title,
+      },
+    });
+
     await db.insert(chats).values({
       id: chatId,
       userId,
@@ -86,10 +146,25 @@ export const upsertChat = async (opts: {
       createdAt: new Date(),
       updatedAt: new Date(),
     });
+
+    insertChatSpan?.end({
+      output: {
+        success: true,
+        chatId,
+      },
+    });
   }
 
   // Insert all messages
   if (messageList.length > 0) {
+    const insertMessagesSpan = trace?.span({
+      name: "insert-chat-messages",
+      input: {
+        chatId,
+        messageCount: messageList.length,
+      },
+    });
+
     await db.insert(messages).values(
       messageList.map((message, index) => ({
         id: message.id ?? crypto.randomUUID(),
@@ -99,6 +174,13 @@ export const upsertChat = async (opts: {
         order: index,
       })),
     );
+
+    insertMessagesSpan?.end({
+      output: {
+        success: true,
+        messageCount: messageList.length,
+      },
+    });
   }
 };
 

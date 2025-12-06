@@ -76,7 +76,26 @@ export async function POST(request: Request) {
     return new Response("Unauthorized", { status: 401 });
   }
 
+  // Create trace early, before first DB call
+  const trace = langfuse.trace({
+    name: "chat",
+    userId: session.user.id,
+  });
+
+  const getUserByIdSpan = trace.span({
+    name: "get-user-by-id",
+    input: {
+      userId: session.user.id,
+    },
+  });
+
   const user = await getUserById(session.user.id);
+
+  getUserByIdSpan.end({
+    output: {
+      user: user ? { id: user.id, isAdmin: user.isAdmin } : null,
+    },
+  });
 
   if (!user) {
     return new Response("Unauthorized", { status: 401 });
@@ -94,6 +113,15 @@ export async function POST(request: Request) {
 
   // Ensure all incoming messages have non-null `parts` before we touch the DB.
   const messages = rawMessages.map(normalizeMessage);
+
+  // Update trace with sessionId and input messages
+  trace.update({
+    sessionId: chatId,
+    input: {
+      messages,
+      messageCount: messages.length,
+    },
+  });
 
   const getChatTitleFromMessages = (allMessages: Array<UIMessage>): string => {
     const firstUserMessage = allMessages.find(
@@ -125,7 +153,20 @@ export async function POST(request: Request) {
     
     // If limit is 0, allow unlimited requests
     if (dailyLimit > 0) {
+      const getDailyRequestCountSpan = trace.span({
+        name: "get-daily-request-count",
+        input: {
+          userId: user.id,
+        },
+      });
+
       const requestCount = await getDailyRequestCount(user.id);
+
+      getDailyRequestCountSpan.end({
+        output: {
+          requestCount,
+        },
+      });
 
       if (requestCount >= dailyLimit) {
         return new Response("Too Many Requests", { status: 429 });
@@ -133,19 +174,35 @@ export async function POST(request: Request) {
     }
   }
 
+  const insertRequestLogSpan = trace.span({
+    name: "insert-request-log",
+    input: {
+      userId: user.id,
+    },
+  });
+
   await insertRequestLog(user.id);
+
+  insertRequestLogSpan.end({
+    output: {
+      success: true,
+    },
+  });
 
   // If this is a brand new chat, create it immediately
   // so that we have it persisted even if the stream is cancelled or fails.
   if (isNewChat) {
     const initialTitle = getChatTitleFromMessages(messages);
 
-    await upsertChat({
-      userId: user.id,
-      chatId,
-      title: initialTitle,
-      messages,
-    });
+    await upsertChat(
+      {
+        userId: user.id,
+        chatId,
+        title: initialTitle,
+        messages,
+      },
+      trace,
+    );
   }
 
   // Filter out tool role messages - convertToModelMessages doesn't support them,
@@ -155,12 +212,6 @@ export async function POST(request: Request) {
   );
 
   const modelMessages = convertToModelMessages(messagesWithoutTool);
-
-  const trace = langfuse.trace({
-    sessionId: chatId,
-    name: "chat",
-    userId: session.user.id,
-  });
 
   const currentDate = new Date().toISOString();
   const formattedDate = new Date().toLocaleDateString("en-US", {
@@ -289,11 +340,23 @@ When answering questions, you must:
 
       // Save the entire chat message history by replacing all existing messages
       // with the updated messages array for this chat.
-      await upsertChat({
-        userId: user.id,
-        chatId,
-        title,
-        messages: updatedMessages,
+      await upsertChat(
+        {
+          userId: user.id,
+          chatId,
+          title,
+          messages: updatedMessages,
+        },
+        trace,
+      );
+
+      // Update trace with output messages
+      trace.update({
+        output: {
+          messages: updatedMessages,
+          messageCount: updatedMessages.length,
+          title,
+        },
       });
 
       await langfuse.flushAsync();
