@@ -14,6 +14,8 @@ const getSystemPrompt = (formattedDate: string, currentDate: string) => {
 
 Current date and time: ${formattedDate} (ISO: ${currentDate})
 
+CRITICAL REQUIREMENT: Every response you generate MUST include at least one markdown link in the format [source text](url). This is mandatory and non-negotiable. Even if scraping fails, you must cite sources from searchWeb results using markdown links.
+
 When answering questions, you must:
 - Always use the searchWeb tool to find current and accurate information
 - Always use the scrapePages tool on a diverse set of high-signal URLs (for example, the top 4–6 results from searchWeb), ideally from different domains, to retrieve the full page content in markdown before composing your final answer
@@ -23,7 +25,8 @@ When answering questions, you must:
 - Provide comprehensive answers based on both the search results and the scraped page content
 - If the user asks about current events, recent information, or anything that requires up-to-date data, you must use the searchWeb tool and then use scrapePages on at least one relevant result, preferably 4–6 diverse URLs when available
 - When users ask for up-to-date information, pay attention to the publication dates of search results and prioritize more recent sources. Use the current date (${formattedDate}) to determine how recent information is and inform users about the recency of the information you're providing
-- Respect that scrapePages may return errors when a site cannot be crawled (for example due to robots.txt); in that case, explain this limitation to the user and fall back to other available information`;
+- Respect that scrapePages may return errors when a site cannot be crawled (for example due to robots.txt); in that case, explain this limitation to the user and fall back to other available information, but ALWAYS include markdown links to the searchWeb results
+- Before finishing your response, verify that you have included at least one markdown link. If you haven't, add links to relevant sources from the searchWeb results using the format [source text](url)`
 };
 
 export const streamFromDeepSearch = (opts: {
@@ -45,12 +48,12 @@ export const streamFromDeepSearch = (opts: {
   return streamText({
     model,
     messages: opts.messages,
-    stopWhen: stepCountIs(10),
+    stopWhen: stepCountIs(15),
     system: getSystemPrompt(formattedDate, currentDate),
     tools: {
       searchWeb: {
         inputSchema: z.object({
-          query: z.string().describe("The query to search the web for"),
+          query: z.string().describe("The query to search the web for. The results will include URLs that you MUST cite in your final response using markdown links."),
         }),
         execute: async ({ query }, { abortSignal }) => {
           const results = await searchSerper(
