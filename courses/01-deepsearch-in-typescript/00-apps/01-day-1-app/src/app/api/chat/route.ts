@@ -168,7 +168,13 @@ export async function POST(request: Request) {
       });
 
       if (requestCount >= dailyLimit) {
-        return new Response("Too Many Requests", { status: 429 });
+        return Response.json(
+          {
+            error: "DAILY_LIMIT_EXCEEDED",
+            message: "Daily request limit reached. Please try again tomorrow.",
+          },
+          { status: 429 },
+        );
       }
     }
   }
@@ -192,15 +198,20 @@ export async function POST(request: Request) {
   });
 
   if (!rateLimitCheck.allowed) {
-    console.log("[rate-limit] blocked, waiting for reset", {
+    const retryAfterMs = Math.max(0, rateLimitCheck.resetTime - Date.now());
+    console.log("[rate-limit] blocked, returning 429", {
       userId: user.id,
-      waitMs: rateLimitCheck.resetTime - Date.now(),
+      retryAfterMs,
     });
-    const isAllowed = await rateLimitCheck.retry();
-    if (!isAllowed) {
-      console.warn("Rate limit exceeded");
-      return new Response("Too Many Requests", { status: 429 });
-    }
+
+    return Response.json(
+      {
+        error: "RATE_LIMIT_EXCEEDED",
+        message: "Rate limit exceeded. Please wait a few seconds and try again.",
+        retryAfterMs,
+      },
+      { status: 429 },
+    );
   }
 
   console.log("[rate-limit] recording hit", {

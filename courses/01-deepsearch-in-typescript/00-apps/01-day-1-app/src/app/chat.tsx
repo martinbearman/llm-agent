@@ -41,7 +41,8 @@ export const ChatPage = ({
         const body = options?.body
           ? JSON.parse(options.body as string)
           : {};
-        return fetch(url, {
+
+        const response = await fetch(url, {
           ...options,
           body: JSON.stringify({
             ...body,
@@ -49,6 +50,29 @@ export const ChatPage = ({
             isNewChat,
           }),
         });
+
+        if (response.ok) return response;
+
+        const contentType = response.headers.get("content-type") ?? "";
+        if (contentType.includes("application/json")) {
+          const data = (await response.json().catch(() => null)) as
+            | {
+                message?: string;
+                retryAfterMs?: number;
+              }
+            | null;
+
+          const message = data?.message ?? "Request failed";
+          const retryAfterMs = data?.retryAfterMs;
+          const suffix =
+            typeof retryAfterMs === "number"
+              ? ` retryAfterMs=${retryAfterMs}`
+              : "";
+          throw new Error(`${response.status}: ${message}${suffix}`);
+        }
+
+        const text = await response.text().catch(() => "");
+        throw new Error(`${response.status}: ${text || "Request failed"}`);
       },
     }),
     // `initialMessages` is passed via the transport's initial config so that
@@ -57,21 +81,27 @@ export const ChatPage = ({
     messages: initialMessages,
     id: chatId,
     onError: (error) => {
-      const errorMessage =
-        error instanceof Error
-          ? error.message.toLowerCase()
-          : String(error).toLowerCase();
+      const rawMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage = rawMessage.toLowerCase();
 
-      // Show sign-in modal if we get a 401 Unauthorized error
       if (errorMessage.includes("401") || errorMessage.includes("unauthorized")) {
         setShowSignInModal(true);
         return;
       }
 
-      // Show toast if we get a 429 Too Many Requests error
       if (errorMessage.includes("429") || errorMessage.includes("too many requests")) {
+        const isDailyLimit =
+          errorMessage.includes("daily_limit_exceeded") ||
+          errorMessage.includes("daily request limit");
+        const retryAfterMatch = rawMessage.match(/retryafterms[:=]\s*(\d+)/i);
+        const retryAfterSeconds = retryAfterMatch
+          ? Math.ceil(parseInt(retryAfterMatch[1] ?? "0", 10) / 1000)
+          : null;
+
         toast.error("Rate limit exceeded", {
-          description: "You've reached your daily request limit. Please try again tomorrow.",
+          description: isDailyLimit
+            ? "You've reached your daily request limit. Please try again tomorrow."
+            : `Please wait${retryAfterSeconds ? ` about ${retryAfterSeconds} seconds` : ""} and try again.`,
         });
       }
     },
