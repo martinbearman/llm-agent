@@ -3,6 +3,8 @@ import { convertToModelMessages } from "ai";
 import { Langfuse } from "langfuse";
 import { env } from "~/env";
 import { auth } from "~/server/auth";
+import type { RateLimitConfig } from "~/server/rate-limit";
+import { checkRateLimit, recordRateLimit } from "~/server/rate-limit";
 import { streamFromDeepSearch } from "~/deep-search";
 import {
   getDailyRequestCount,
@@ -170,6 +172,42 @@ export async function POST(request: Request) {
       }
     }
   }
+
+  // Global throttle to avoid bursts while the LLM backend initializes
+  const globalRateLimit: RateLimitConfig = {
+    maxRequests: 1,
+    maxRetries: 3,
+    windowMs: 20_000,
+    keyPrefix: "global_llm",
+  };
+
+  const rateLimitCheck = await checkRateLimit(globalRateLimit);
+
+  console.log("[rate-limit] check", {
+    userId: user.id,
+    allowed: rateLimitCheck.allowed,
+    remaining: rateLimitCheck.remaining,
+    totalHits: rateLimitCheck.totalHits,
+    resetTime: rateLimitCheck.resetTime,
+  });
+
+  if (!rateLimitCheck.allowed) {
+    console.log("[rate-limit] blocked, waiting for reset", {
+      userId: user.id,
+      waitMs: rateLimitCheck.resetTime - Date.now(),
+    });
+    const isAllowed = await rateLimitCheck.retry();
+    if (!isAllowed) {
+      console.warn("Rate limit exceeded");
+      return new Response("Too Many Requests", { status: 429 });
+    }
+  }
+
+  console.log("[rate-limit] recording hit", {
+    userId: user.id,
+    keyPrefix: globalRateLimit.keyPrefix,
+  });
+  await recordRateLimit(globalRateLimit);
 
   const insertRequestLogSpan = trace.span({
     name: "insert-request-log",

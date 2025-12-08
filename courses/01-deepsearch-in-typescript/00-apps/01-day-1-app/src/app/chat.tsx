@@ -3,7 +3,7 @@
 import { DefaultChatTransport } from "ai";
 import { useChat } from "@ai-sdk/react";
 import { Loader2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { StickToBottom } from "use-stick-to-bottom";
@@ -89,14 +89,6 @@ export const ChatPage = ({
   });
 
   const isLoading = status === "streaming" || status === "submitted";
-
-  useEffect(() => {
-    console.log("ChatPage - All messages:", messages);
-    messages.forEach((message, index) => {
-      console.log(`ChatPage - Message ${index}:`, message);
-      console.log(`ChatPage - Message ${index} parts:`, message.parts);
-    });
-  }, [messages]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setInput(e.target.value);

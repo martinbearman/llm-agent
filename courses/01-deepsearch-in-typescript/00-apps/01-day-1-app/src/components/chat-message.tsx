@@ -41,10 +41,7 @@ const Markdown = ({ children }: { children: string }) => {
 };
 
 const ToolInvocation = ({ part }: { part: MessagePart }) => {
-  // Handle different possible structures - log to see what we actually get
-  console.log("ToolInvocation - part:", part);
-  
-  // Try to extract tool information from the part
+  // Handle different possible structures and surface a consistent summary
   const toolName = "toolName" in part ? part.toolName : part.type.replace("tool-", "");
   const state = "state" in part ? part.state : "unknown";
   const args = "args" in part ? part.args : ("input" in part ? part.input : {});
@@ -134,8 +131,6 @@ export const ChatMessage = ({ message, userName }: ChatMessageProps) => {
 
         <div className="prose prose-invert max-w-none">
           {parts.map((part: MessagePart, index: number) => {
-            console.log(`ChatMessage - Part ${index}:`, part);
-            console.log(`ChatMessage - Part ${index} type:`, part.type);
             if (part.type === "text") {
               return <Markdown key={index}>{part.text}</Markdown>;
             }
