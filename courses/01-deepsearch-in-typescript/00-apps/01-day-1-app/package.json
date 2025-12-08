@@ -12,6 +12,7 @@
     "db:studio": "drizzle-kit studio",
     "dev": "next dev --turbo",
     "evals": "evalite watch",
+    "evals:run": "evalite run",
     "lint": "next lint",
     "lint:fix": "next lint --fix",
     "preview": "next build && next start",

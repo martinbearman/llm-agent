@@ -48,7 +48,10 @@ export const streamFromDeepSearch = (opts: {
   return streamText({
     model,
     messages: opts.messages,
-    stopWhen: stepCountIs(15),
+    // Reduced from 15 to 8 to limit costs - each step can involve multiple model calls
+    // (tool selection, result processing, next action). 8 steps is typically sufficient
+    // for: searchWeb (1) -> scrapePages (1) -> final response (1) with some retries/refinements
+    stopWhen: stepCountIs(8),
     system: getSystemPrompt(formattedDate, currentDate),
     tools: {
       searchWeb: {
