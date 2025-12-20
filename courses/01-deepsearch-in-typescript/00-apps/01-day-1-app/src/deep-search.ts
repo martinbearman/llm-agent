@@ -1,8 +1,9 @@
 import {
   streamText,
   stepCountIs,
-  type Message,
   type TelemetrySettings,
+  type UIMessage,
+  convertToModelMessages,
 } from "ai";
 import { z } from "zod";
 import { model } from "~/model";
@@ -29,8 +30,10 @@ When answering questions, you must:
 - Before finishing your response, verify that you have included at least one markdown link. If you haven't, add links to relevant sources from the searchWeb results using the format [source text](url)`
 };
 
+type ModelMessage = ReturnType<typeof convertToModelMessages>[number];
+
 export const streamFromDeepSearch = (opts: {
-  messages: Message[];
+  messages: ModelMessage[];
   onFinish: Parameters<typeof streamText>[0]["onFinish"];
   telemetry: TelemetrySettings;
 }) => {
@@ -131,9 +134,17 @@ export const streamFromDeepSearch = (opts: {
   });
 };
 
-export async function askDeepSearch(messages: Message[]) {
+export async function askDeepSearch(messages: UIMessage[]) {
+  // Filter out tool role messages - convertToModelMessages doesn't support them,
+  // and the SDK will reconstruct tool calls from assistant messages automatically
+  const messagesWithoutTool = messages.filter(
+    (message) => (message.role as string) !== "tool",
+  );
+
+  const modelMessages = convertToModelMessages(messagesWithoutTool);
+
   const result = streamFromDeepSearch({
-    messages,
+    messages: modelMessages,
     onFinish: () => {}, // just a stub
     telemetry: {
       isEnabled: false,

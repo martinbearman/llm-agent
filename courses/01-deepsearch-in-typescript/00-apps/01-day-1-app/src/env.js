@@ -33,6 +33,7 @@ export const env = createEnv({
       .enum(["development", "test", "production"])
       .default("development"),
     REQUESTS_PER_DAY_LIMIT: z.coerce.number().int().nonnegative().default(25),
+    EVAL_DATASET: z.enum(["dev", "ci", "regression"]).default("dev"),
   },
 
   /**
@@ -59,6 +60,7 @@ export const env = createEnv({
     LANGFUSE_BASE_URL: process.env.LANGFUSE_BASE_URL,
     NODE_ENV: process.env.NODE_ENV,
     REQUESTS_PER_DAY_LIMIT: process.env.REQUESTS_PER_DAY_LIMIT,
+    EVAL_DATASET: process.env.EVAL_DATASET,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially
