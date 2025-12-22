@@ -33,6 +33,8 @@ export const env = createEnv({
       .enum(["development", "test", "production"])
       .default("development"),
     REQUESTS_PER_DAY_LIMIT: z.coerce.number().int().nonnegative().default(25),
+    SEARCH_RESULTS_COUNT: z.coerce.number().int().positive().default(10),
+    SCRAPE_URLS_COUNT: z.coerce.number().int().positive().default(5),
     EVAL_DATASET: z.enum(["dev", "ci", "regression"]).default("dev"),
   },
 
@@ -60,6 +62,8 @@ export const env = createEnv({
     LANGFUSE_BASE_URL: process.env.LANGFUSE_BASE_URL,
     NODE_ENV: process.env.NODE_ENV,
     REQUESTS_PER_DAY_LIMIT: process.env.REQUESTS_PER_DAY_LIMIT,
+    SEARCH_RESULTS_COUNT: process.env.SEARCH_RESULTS_COUNT,
+    SCRAPE_URLS_COUNT: process.env.SCRAPE_URLS_COUNT,
     EVAL_DATASET: process.env.EVAL_DATASET,
   },
   /**

@@ -6,6 +6,7 @@ import {
   convertToModelMessages,
 } from "ai";
 import { z } from "zod";
+import { env } from "~/env";
 import { model } from "~/model";
 import { searchSerper } from "~/serper";
 import { crawlMultipleUrls } from "~/server/scraper";
@@ -19,12 +20,12 @@ CRITICAL REQUIREMENT: Every response you generate MUST include at least one mark
 
 When answering questions, you must:
 - Always use the searchWeb tool to find current and accurate information
-- Always use the scrapePages tool on a diverse set of high-signal URLs (for example, the top 4–6 results from searchWeb), ideally from different domains, to retrieve the full page content in markdown before composing your final answer
+- Always use the scrapePages tool on a diverse set of high-signal URLs (for example, the top ${env.SCRAPE_URLS_COUNT} results from searchWeb), ideally from different domains, to retrieve the full page content in markdown before composing your final answer
 - When selecting URLs for scrapePages, prefer diversity of sources (e.g. news sites, blogs, documentation, reference sites) rather than multiple pages from the same domain, unless the topic is highly specialized
-- If there are many relevant results, choose 4–6 URLs to scrape in a single scrapePages call; if fewer are available, scrape all that are clearly relevant
+- If there are many relevant results, choose ${env.SCRAPE_URLS_COUNT} URLs to scrape in a single scrapePages call; if fewer are available, scrape all that are clearly relevant
 - Cite your sources with inline links using markdown format: [source text](url)
 - Provide comprehensive answers based on both the search results and the scraped page content
-- If the user asks about current events, recent information, or anything that requires up-to-date data, you must use the searchWeb tool and then use scrapePages on at least one relevant result, preferably 4–6 diverse URLs when available
+- If the user asks about current events, recent information, or anything that requires up-to-date data, you must use the searchWeb tool and then use scrapePages on at least one relevant result, preferably ${env.SCRAPE_URLS_COUNT} diverse URLs when available
 - When users ask for up-to-date information, pay attention to the publication dates of search results and prioritize more recent sources. Use the current date (${formattedDate}) to determine how recent information is and inform users about the recency of the information you're providing
 - Respect that scrapePages may return errors when a site cannot be crawled (for example due to robots.txt); in that case, explain this limitation to the user and fall back to other available information, but ALWAYS include markdown links to the searchWeb results
 - Before finishing your response, verify that you have included at least one markdown link. If you haven't, add links to relevant sources from the searchWeb results using the format [source text](url)`
@@ -63,7 +64,7 @@ export const streamFromDeepSearch = (opts: {
         }),
         execute: async ({ query }, { abortSignal }) => {
           const results = await searchSerper(
-            { q: query, num: 10 },
+            { q: query, num: env.SEARCH_RESULTS_COUNT },
             abortSignal,
           );
 
