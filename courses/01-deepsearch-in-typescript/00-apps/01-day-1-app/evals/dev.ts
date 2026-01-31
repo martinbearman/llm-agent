@@ -16,10 +16,10 @@ export const devData: { input: UIMessage[]; expected: string }[] = [
       {
         id: "4",
         role: "user",
-        parts: [{ type: "text", text: "Between Max Verstappen and Lando Norris, who had the most overall fastest laps in their last championship winning season?" }],
+        parts: [{ type: "text", text: "Who had the most fastest laps in their last championship-winning seasons, Max Verstappen or Lando Norris" }],
       },
     ],
-    expected: "Lando Norris had the most overall fastest lap in his last championship winning season.",
+    expected: "Lando Norris had 6 fastest laps in his last championship winning season in 2025, Max Verstappen had 3 fastest laps championship winning season in 2024. So Lando had more overall fastest laps in his last championship winning season.",
   },
 ];
 

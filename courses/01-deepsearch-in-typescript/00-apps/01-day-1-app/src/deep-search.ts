@@ -4,12 +4,14 @@ import {
   type TelemetrySettings,
   type UIMessage,
   convertToModelMessages,
+  generateObject,
 } from "ai";
 import { z } from "zod";
 import { env } from "~/env";
 import { model } from "~/model";
 import { searchSerper } from "~/serper";
 import { crawlMultipleUrls } from "~/server/scraper";
+import type { SystemContext } from "~/system-context";
 
 const getSystemPrompt = (formattedDate: string, currentDate: string) => {
   return `You are a helpful AI assistant with access to web search and web scraping capabilities.
@@ -32,6 +34,48 @@ When answering questions, you must:
 };
 
 type ModelMessage = ReturnType<typeof convertToModelMessages>[number];
+
+export interface SearchAction {
+  type: "search";
+  query: string;
+}
+
+export interface ScrapeAction {
+  type: "scrape";
+  urls: string[];
+}
+
+export interface AnswerAction {
+  type: "answer";
+}
+
+export type Action =
+  | SearchAction
+  | ScrapeAction
+  | AnswerAction;
+
+export const actionSchema = z.object({
+  type: z
+    .enum(["search", "scrape", "answer"])
+    .describe(
+      `The type of action to take.
+      - 'search': Search the web for more information.
+      - 'scrape': Scrape a URL.
+      - 'answer': Answer the user's question and complete the loop.`,
+    ),
+  query: z
+    .string()
+    .describe(
+      "The query to search for. Required if type is 'search'.",
+    )
+    .optional(),
+  urls: z
+    .array(z.string())
+    .describe(
+      "The URLs to scrape. Required if type is 'scrape'.",
+    )
+    .optional(),
+});
 
 export const streamFromDeepSearch = (opts: {
   messages: ModelMessage[];
@@ -158,4 +202,40 @@ export async function askDeepSearch(messages: UIMessage[]) {
 
   return await result.text;
 }
+
+export const getNextAction = async (
+  context: SystemContext,
+) => {
+  const currentDate = new Date().toISOString();
+  const formattedDate = new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+    timeZoneName: "short",
+  });
+
+  const result = await generateObject({
+    model,
+    schema: actionSchema,
+    prompt: `You are a helpful AI assistant that can search the web, scrape URLs, or answer the user's question.
+
+Current date and time: ${formattedDate} (ISO: ${currentDate})
+
+You need to choose the next action to take based on the context provided below. Consider:
+- If you need more information, choose 'search' with an appropriate query
+- If you have search results with URLs that need to be scraped, choose 'scrape' with the relevant URLs
+- If you have enough information to answer the user's question, choose 'answer'
+
+Here is the context:
+
+${context.getQueryHistory()}
+
+${context.getScrapeHistory()}`,
+  });
+
+  return result.object as Action;
+};
 

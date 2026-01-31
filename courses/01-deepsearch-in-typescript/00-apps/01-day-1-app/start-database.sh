@@ -55,6 +55,6 @@ docker run -d \
   --name $DB_CONTAINER_NAME \
   -e POSTGRES_USER="postgres" \
   -e POSTGRES_PASSWORD="$DB_PASSWORD" \
-  -e POSTGRES_DB=ai-app-template \
-  -p "$DB_PORT":5432 \
+  -e POSTGRES_DB=dashboard \
+  -p "$DB_PORT":5433 \
   pgvector/pgvector:pg17 && echo "Database container '$DB_CONTAINER_NAME' was successfully created"
