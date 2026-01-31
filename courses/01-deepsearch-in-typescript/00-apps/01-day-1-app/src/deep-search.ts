@@ -203,9 +203,35 @@ export async function askDeepSearch(messages: UIMessage[]) {
   return await result.text;
 }
 
+function getNextActionSystemPrompt(formattedDate: string, currentDate: string) {
+  return `You are a helpful AI assistant with access to web search and web scraping capabilities.
+
+Current date and time: ${formattedDate} (ISO: ${currentDate})
+
+Your job is to choose the next action based on the context provided. You must pick exactly one:
+
+- **search**: Use when you need more information. Provide a clear, specific query. For current events or up-to-date data, search first. Consider publication dates and recency.
+- **scrape**: Use when you have search results with URLs that need full page content. Provide a diverse set of high-signal URLs (e.g. from different domains: news, docs, blogs). Prefer scraping multiple relevant URLs when available.
+- **answer**: Use when you have enough information from search and scraped content to answer the user's question. You will then cite sources with markdown links and complete the loop.
+
+Choose 'answer' only when the context already contains enough search and scrape results to give a comprehensive, well-sourced response.`;
+}
+
+function parseNextActionResult(
+  raw: z.infer<typeof actionSchema>,
+): Action {
+  if (raw.type === "search") {
+    return { type: "search", query: raw.query ?? "" };
+  }
+  if (raw.type === "scrape") {
+    return { type: "scrape", urls: raw.urls ?? [] };
+  }
+  return { type: "answer" };
+}
+
 export const getNextAction = async (
   context: SystemContext,
-) => {
+): Promise<Action> => {
   const currentDate = new Date().toISOString();
   const formattedDate = new Date().toLocaleDateString("en-US", {
     weekday: "long",
@@ -220,14 +246,7 @@ export const getNextAction = async (
   const result = await generateObject({
     model,
     schema: actionSchema,
-    prompt: `You are a helpful AI assistant that can search the web, scrape URLs, or answer the user's question.
-
-Current date and time: ${formattedDate} (ISO: ${currentDate})
-
-You need to choose the next action to take based on the context provided below. Consider:
-- If you need more information, choose 'search' with an appropriate query
-- If you have search results with URLs that need to be scraped, choose 'scrape' with the relevant URLs
-- If you have enough information to answer the user's question, choose 'answer'
+    prompt: `${getNextActionSystemPrompt(formattedDate, currentDate)}
 
 Here is the context:
 
@@ -236,6 +255,6 @@ ${context.getQueryHistory()}
 ${context.getScrapeHistory()}`,
   });
 
-  return result.object as Action;
+  return parseNextActionResult(result.object);
 };
 
