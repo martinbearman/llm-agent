@@ -1,16 +1,16 @@
-type QueryResultSearchResult = {
+export type QueryResultSearchResult = {
   date: string;
   title: string;
   url: string;
   snippet: string;
 };
 
-type QueryResult = {
+export type QueryResult = {
   query: string;
   results: QueryResultSearchResult[];
 };
 
-type ScrapeResult = {
+export type ScrapeResult = {
   url: string;
   result: string;
 };
