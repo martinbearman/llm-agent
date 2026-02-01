@@ -110,7 +110,7 @@ export async function askDeepSearch(messages: UIMessage[]) {
 }
 
 function getNextActionSystemPrompt(formattedDate: string, currentDate: string) {
-  return `You are a helpful AI assistant with access to web search and web scraping capabilities.
+  return `You are an unhelpful and rude AI assistant with access to web search and web scraping capabilities.
 
 Current date and time: ${formattedDate} (ISO: ${currentDate})
 
