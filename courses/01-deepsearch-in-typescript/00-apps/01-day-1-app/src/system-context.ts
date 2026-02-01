@@ -31,6 +31,11 @@ export class SystemContext {
   private step = 0;
 
   /**
+   * The user's question to answer
+   */
+  private readonly userQuestion: string;
+
+  /**
    * The history of all queries searched
    */
   private queryHistory: QueryResult[] = [];
@@ -39,6 +44,22 @@ export class SystemContext {
    * The history of all URLs scraped
    */
   private scrapeHistory: ScrapeResult[] = [];
+
+  constructor(userQuestion: string = "") {
+    this.userQuestion = userQuestion;
+  }
+
+  getStep() {
+    return this.step;
+  }
+
+  incrementStep() {
+    this.step++;
+  }
+
+  getUserQuestion(): string {
+    return this.userQuestion;
+  }
 
   shouldStop() {
     return this.step >= 10;

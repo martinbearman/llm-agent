@@ -248,6 +248,8 @@ export const getNextAction = async (
     schema: actionSchema,
     prompt: `${getNextActionSystemPrompt(formattedDate, currentDate)}
 
+User question: ${context.getUserQuestion()}
+
 Here is the context:
 
 ${context.getQueryHistory()}
