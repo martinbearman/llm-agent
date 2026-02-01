@@ -1,4 +1,4 @@
-import { generateText } from "ai";
+import { streamText, type StreamTextResult } from "ai";
 import { model } from "~/model";
 import type { SystemContext } from "~/system-context";
 
@@ -18,10 +18,10 @@ Current date and time: ${formattedDate} (ISO: ${currentDate})
 Your job is to answer the user's question using only the context below (search results and scraped page content). Cite your sources with inline markdown links in the format [source text](url). Include at least one markdown link. Be comprehensive and accurate based on the context.${finalNote}`;
 }
 
-export async function answerQuestion(
+export function answerQuestion(
   context: SystemContext,
   opts?: { isFinal?: boolean },
-): Promise<string> {
+): StreamTextResult<Record<string, never>, string> {
   const isFinal = opts?.isFinal ?? false;
   const currentDate = new Date().toISOString();
   const formattedDate = new Date().toLocaleDateString("en-US", {
@@ -34,7 +34,7 @@ export async function answerQuestion(
     timeZoneName: "short",
   });
 
-  const { text } = await generateText({
+  return streamText({
     model,
     system: getAnswerSystemPrompt(formattedDate, currentDate, isFinal),
     prompt: `User question: ${context.getUserQuestion()}
@@ -45,6 +45,4 @@ ${context.getScrapeHistory()}
 
 Answer the user's question based on the context above. Use markdown links to cite sources.`,
   });
-
-  return text;
 }

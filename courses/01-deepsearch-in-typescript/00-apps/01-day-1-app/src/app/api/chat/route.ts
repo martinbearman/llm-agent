@@ -259,7 +259,7 @@ export async function POST(request: Request) {
 
   const modelMessages = convertToModelMessages(messagesWithoutTool);
 
-  const result = streamFromDeepSearch({
+  const result = await streamFromDeepSearch({
     messages: modelMessages,
     telemetry: {
       isEnabled: true,

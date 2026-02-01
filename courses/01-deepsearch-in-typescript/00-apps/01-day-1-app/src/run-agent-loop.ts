@@ -1,3 +1,4 @@
+import type { StreamTextResult } from "ai";
 import { env } from "~/env";
 import { searchSerper } from "~/serper";
 import { crawlMultipleUrls } from "~/server/scraper";
@@ -74,7 +75,9 @@ async function scrapeUrl(
  * Run the agent loop: repeatedly get next action, execute it, and either
  * return an answer or continue until the step limit, then return a best-effort answer.
  */
-export async function runAgentLoop(userQuestion: string): Promise<string> {
+export async function runAgentLoop(
+  userQuestion: string,
+): Promise<StreamTextResult<Record<string, never>, string>> {
   const ctx = new SystemContext(userQuestion);
 
   while (!ctx.shouldStop()) {
