@@ -64,9 +64,13 @@ ${LINK_FORMATTING_RULES}${finalNote}`;
 
 export function answerQuestion(
   context: SystemContext,
-  opts?: { isFinal?: boolean },
+  opts?: {
+    isFinal?: boolean;
+    onFinish?: (args: { response: { messages: unknown[] } }) => void | Promise<void>;
+  },
 ): StreamTextResult<Record<string, never>, string> {
   const isFinal = opts?.isFinal ?? false;
+  const onFinish = opts?.onFinish;
   const currentDate = new Date().toISOString();
   const formattedDate = new Date().toLocaleDateString("en-US", {
     weekday: "long",
@@ -88,5 +92,6 @@ ${context.getQueryHistory()}
 ${context.getScrapeHistory()}
 
 Answer the user's question based on the context above. Cite sources using footnotes only (e.g. [^1] in text and [^1]: URL at the end).`,
+    onFinish,
   });
 }

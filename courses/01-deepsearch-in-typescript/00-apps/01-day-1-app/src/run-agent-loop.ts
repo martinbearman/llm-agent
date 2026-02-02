@@ -77,8 +77,12 @@ async function scrapeUrl(
  */
 export async function runAgentLoop(
   userQuestion: string,
+  opts?: {
+    onFinish?: (args: { response: { messages: unknown[] } }) => void | Promise<void>;
+  },
 ): Promise<StreamTextResult<Record<string, never>, string>> {
   const ctx = new SystemContext(userQuestion);
+  const onFinish = opts?.onFinish;
 
   while (!ctx.shouldStop()) {
     const nextAction: Action = await getNextAction(ctx);
@@ -88,11 +92,11 @@ export async function runAgentLoop(
     } else if (nextAction.type === "scrape") {
       await scrapeUrl(ctx, nextAction.urls);
     } else if (nextAction.type === "answer") {
-      return answerQuestion(ctx);
+      return answerQuestion(ctx, { onFinish });
     }
 
     ctx.incrementStep();
   }
 
-  return answerQuestion(ctx, { isFinal: true });
+  return answerQuestion(ctx, { isFinal: true, onFinish });
 }

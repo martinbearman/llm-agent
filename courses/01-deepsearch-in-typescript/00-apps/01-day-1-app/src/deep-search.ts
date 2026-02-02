@@ -82,7 +82,7 @@ export async function streamFromDeepSearch(opts: {
   telemetry: TelemetrySettings;
 }): Promise<StreamTextResult<Record<string, never>, string>> {
   const userQuestion = getUserQuestionFromMessages(opts.messages);
-  return runAgentLoop(userQuestion);
+  return runAgentLoop(userQuestion, { onFinish: opts.onFinish });
 }
 
 export async function askDeepSearch(messages: UIMessage[]) {
