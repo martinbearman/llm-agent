@@ -95,7 +95,11 @@ export function answerQuestion(
         chunking: "line",
       }),
     ],
-    prompt: `User question: ${context.getUserQuestion()}
+    prompt: `${
+      context.getConversationHistory().trim().length > 0
+        ? `Previous conversation:\n${context.getConversationHistory()}\n\nCurrent user question: ${context.getUserQuestion()}`
+        : `User question: ${context.getUserQuestion()}`
+    }
 
 ${context.getQueryHistory()}
 

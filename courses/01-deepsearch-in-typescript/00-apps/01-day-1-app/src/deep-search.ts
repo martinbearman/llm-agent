@@ -11,26 +11,53 @@ import type { SystemContext } from "~/system-context";
 
 type ModelMessage = ReturnType<typeof convertToModelMessages>[number];
 
+function getTextFromMessage(msg: ModelMessage): string {
+  const content = (msg as { content: unknown }).content;
+  if (typeof content === "string") return content.trim();
+  if (Array.isArray(content)) {
+    const textParts = content
+      .filter(
+        (part: { type?: string; text?: string }) =>
+          part.type === "text" && typeof part.text === "string",
+      )
+      .map((part: { text: string }) => part.text);
+    return textParts.join(" ").trim();
+  }
+  return "";
+}
+
 function getUserQuestionFromMessages(messages: ModelMessage[]): string {
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i];
     if (!msg) continue;
     if (msg.role === "user") {
-      const content = (msg as { content: unknown }).content;
-      if (typeof content === "string") return content.trim();
-      if (Array.isArray(content)) {
-        const textParts = content
-          .filter(
-            (part: { type?: string; text?: string }) =>
-              part.type === "text" && typeof part.text === "string",
-          )
-          .map((part: { text: string }) => part.text);
-        return textParts.join(" ").trim();
-      }
-      return "";
+      return getTextFromMessage(msg);
     }
   }
   return "";
+}
+
+/**
+ * Format all messages except the last user message as conversation history,
+ * so the agent has context for follow-up questions like "that's not working".
+ */
+function getConversationHistoryFromMessages(messages: ModelMessage[]): string {
+  if (messages.length <= 1) return "";
+
+  const lastUserIndex = messages.findLastIndex(
+    (msg) => msg && msg.role === "user",
+  );
+  if (lastUserIndex <= 0) return "";
+
+  const priorMessages = messages.slice(0, lastUserIndex);
+  const lines = priorMessages.map((msg) => {
+    if (!msg) return "";
+    const role = msg.role === "user" ? "User" : "Assistant";
+    const text = getTextFromMessage(msg);
+    return `${role}: ${text}`;
+  });
+
+  return lines.filter(Boolean).join("\n\n");
 }
 
 export interface SearchAction {
@@ -104,8 +131,12 @@ export async function streamFromDeepSearch(opts: {
   onFinish?: (args: { response: { messages: unknown[] } }) => void | Promise<void>;
   writeMessageAnnotation?: (annotation: OurMessageAnnotation) => void;
 }): Promise<StreamTextResult<Record<string, never>, string>> {
+  
   const userQuestion = getUserQuestionFromMessages(opts.messages);
+  const conversationHistory = getConversationHistoryFromMessages(opts.messages);
+  
   return runAgentLoop(userQuestion, {
+    conversationHistory,
     langfuseTraceId: opts.langfuseTraceId,
     onFinish: opts.onFinish,
     writeMessageAnnotation: opts.writeMessageAnnotation,
@@ -187,12 +218,17 @@ export const getNextAction = async (
   });
 
   const langfuseTraceId = opts?.langfuseTraceId;
+  const conversationBlock =
+    context.getConversationHistory().trim().length > 0
+      ? `Previous conversation:\n${context.getConversationHistory()}\n\nCurrent user question: ${context.getUserQuestion()}`
+      : `User question: ${context.getUserQuestion()}`;
+
   const result = await generateObject({
     model,
     schema: actionSchema,
     prompt: `${getNextActionSystemPrompt(formattedDate, currentDate)}
 
-User question: ${context.getUserQuestion()}
+${conversationBlock}
 
 Here is the context:
 

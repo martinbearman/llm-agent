@@ -82,12 +82,16 @@ async function scrapeUrl(
 export async function runAgentLoop(
   userQuestion: string,
   opts?: {
+    conversationHistory?: string;
     langfuseTraceId?: string;
     onFinish?: (args: { response: { messages: unknown[] } }) => void | Promise<void>;
     writeMessageAnnotation?: (annotation: OurMessageAnnotation) => void;
   },
 ): Promise<StreamTextResult<Record<string, never>, string>> {
-  const ctx = new SystemContext(userQuestion);
+  const ctx = new SystemContext(
+    userQuestion,
+    opts?.conversationHistory ?? "",
+  );
   const langfuseTraceId = opts?.langfuseTraceId;
   const onFinish = opts?.onFinish;
   const writeMessageAnnotation = opts?.writeMessageAnnotation;

@@ -31,9 +31,14 @@ export class SystemContext {
   private step = 0;
 
   /**
-   * The user's question to answer
+   * The user's question to answer (the latest message)
    */
   private readonly userQuestion: string;
+
+  /**
+   * Formatted prior conversation (user + assistant messages) for context on follow-ups
+   */
+  private readonly conversationHistory: string;
 
   /**
    * The history of all queries searched
@@ -45,8 +50,9 @@ export class SystemContext {
    */
   private scrapeHistory: ScrapeResult[] = [];
 
-  constructor(userQuestion: string = "") {
+  constructor(userQuestion = "", conversationHistory = "") {
     this.userQuestion = userQuestion;
+    this.conversationHistory = conversationHistory;
   }
 
   getStep() {
@@ -59,6 +65,10 @@ export class SystemContext {
 
   getUserQuestion(): string {
     return this.userQuestion;
+  }
+
+  getConversationHistory(): string {
+    return this.conversationHistory;
   }
 
   shouldStop() {
