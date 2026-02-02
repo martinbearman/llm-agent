@@ -1,5 +1,6 @@
 import type { UIMessage } from "ai";
 import ReactMarkdown, { type Components } from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 export type MessagePart = NonNullable<UIMessage["parts"]>[number];
 
@@ -24,20 +25,35 @@ const components: Components = {
       {children}
     </pre>
   ),
-  a: ({ children, ...props }) => (
-    <a
-      className="text-blue-400 underline"
-      target="_blank"
-      rel="noopener noreferrer"
-      {...props}
-    >
+  a: ({ href, children, ...props }) => {
+    const isExternal = href?.startsWith("http");
+    return (
+      <a
+        className="text-blue-400 underline"
+        {...(isExternal && {
+          target: "_blank",
+          rel: "noopener noreferrer",
+        })}
+        href={href}
+        {...props}
+      >
+        {children}
+      </a>
+    );
+  },
+  sup: ({ children, ...props }) => (
+    <sup className="ml-0.5 font-medium text-blue-400" {...props}>
       {children}
-    </a>
+    </sup>
   ),
 };
 
 const Markdown = ({ children }: { children: string }) => {
-  return <ReactMarkdown components={components}>{children}</ReactMarkdown>;
+  return (
+    <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+      {children}
+    </ReactMarkdown>
+  );
 };
 
 const ToolInvocation = ({ part }: { part: MessagePart }) => {
