@@ -36,16 +36,22 @@ function getUserQuestionFromMessages(messages: ModelMessage[]): string {
 
 export interface SearchAction {
   type: "search";
+  title: string;
+  reasoning: string;
   query: string;
 }
 
 export interface ScrapeAction {
   type: "scrape";
+  title: string;
+  reasoning: string;
   urls: string[];
 }
 
 export interface AnswerAction {
   type: "answer";
+  title: string;
+  reasoning: string;
 }
 
 export type Action =
@@ -53,7 +59,24 @@ export type Action =
   | ScrapeAction
   | AnswerAction;
 
+export type OurMessageAnnotation = {
+  type: "NEW_ACTION";
+  action: Action;
+};
+
+export type OurUIMessage = UIMessage<
+  never,
+  { NEW_ACTION: { action: Action } },
+  never
+>;
+
 export const actionSchema = z.object({
+  title: z
+    .string()
+    .describe(
+      "The title of the action, to be displayed in the UI. Be extremely concise. 'Searching Saka's injury history', 'Checking HMRC industrial action', 'Comparing toaster ovens'",
+    ),
+  reasoning: z.string().describe("The reason you chose this step."),
   type: z
     .enum(["search", "scrape", "answer"])
     .describe(
@@ -80,9 +103,13 @@ export async function streamFromDeepSearch(opts: {
   messages: ModelMessage[];
   onFinish?: (args: { response: { messages: unknown[] } }) => void | Promise<void>;
   telemetry: TelemetrySettings;
+  writeMessageAnnotation?: (annotation: OurMessageAnnotation) => void;
 }): Promise<StreamTextResult<Record<string, never>, string>> {
   const userQuestion = getUserQuestionFromMessages(opts.messages);
-  return runAgentLoop(userQuestion, { onFinish: opts.onFinish });
+  return runAgentLoop(userQuestion, {
+    onFinish: opts.onFinish,
+    writeMessageAnnotation: opts.writeMessageAnnotation,
+  });
 }
 
 export async function askDeepSearch(messages: UIMessage[]) {
@@ -126,13 +153,25 @@ Choose 'answer' only when the context already contains enough search and scrape 
 function parseNextActionResult(
   raw: z.infer<typeof actionSchema>,
 ): Action {
+  const title = raw.title ?? "";
+  const reasoning = raw.reasoning ?? "";
   if (raw.type === "search") {
-    return { type: "search", query: raw.query ?? "" };
+    return {
+      type: "search",
+      title,
+      reasoning,
+      query: raw.query ?? "",
+    };
   }
   if (raw.type === "scrape") {
-    return { type: "scrape", urls: raw.urls ?? [] };
+    return {
+      type: "scrape",
+      title,
+      reasoning,
+      urls: raw.urls ?? [],
+    };
   }
-  return { type: "answer" };
+  return { type: "answer", title, reasoning };
 }
 
 export const getNextAction = async (

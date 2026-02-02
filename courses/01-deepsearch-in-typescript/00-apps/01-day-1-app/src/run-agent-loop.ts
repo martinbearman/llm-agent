@@ -8,7 +8,11 @@ import {
   type ScrapeResult,
   SystemContext,
 } from "~/system-context";
-import { getNextAction, type Action } from "~/deep-search";
+import {
+  getNextAction,
+  type Action,
+  type OurMessageAnnotation,
+} from "~/deep-search";
 import { answerQuestion } from "~/answer-question";
 
 /**
@@ -79,13 +83,20 @@ export async function runAgentLoop(
   userQuestion: string,
   opts?: {
     onFinish?: (args: { response: { messages: unknown[] } }) => void | Promise<void>;
+    writeMessageAnnotation?: (annotation: OurMessageAnnotation) => void;
   },
 ): Promise<StreamTextResult<Record<string, never>, string>> {
   const ctx = new SystemContext(userQuestion);
   const onFinish = opts?.onFinish;
+  const writeMessageAnnotation = opts?.writeMessageAnnotation;
 
   while (!ctx.shouldStop()) {
     const nextAction: Action = await getNextAction(ctx);
+
+    writeMessageAnnotation?.({
+      type: "NEW_ACTION",
+      action: nextAction,
+    } satisfies OurMessageAnnotation);
 
     if (nextAction.type === "search") {
       await searchWeb(ctx, nextAction.query);

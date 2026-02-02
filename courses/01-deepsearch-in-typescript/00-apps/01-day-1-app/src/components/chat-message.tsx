@@ -1,8 +1,79 @@
 import type { UIMessage } from "ai";
+import { Link as LinkIcon, Search as SearchIcon } from "lucide-react";
+import { useState } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import type { OurMessageAnnotation } from "~/deep-search";
 
 export type MessagePart = NonNullable<UIMessage["parts"]>[number];
+
+const ReasoningSteps = ({
+  annotations,
+}: {
+  annotations: OurMessageAnnotation[];
+}) => {
+  const [openStep, setOpenStep] = useState<number | null>(null);
+
+  if (annotations.length === 0) return null;
+
+  return (
+    <div className="mb-4 w-full">
+      <ul className="space-y-1">
+        {annotations.map((annotation, index) => {
+          const isOpen = openStep === index;
+          return (
+            <li key={index} className="relative">
+              <button
+                onClick={() => setOpenStep(isOpen ? null : index)}
+                className={`min-w-34 flex w-full flex-shrink-0 items-center rounded px-2 py-1 text-left text-sm transition-colors ${
+                  isOpen
+                    ? "bg-gray-700 text-gray-200"
+                    : "text-gray-400 hover:bg-gray-800 hover:text-gray-300"
+                }`}
+              >
+                <span
+                  className={`z-10 mr-3 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border-2 border-gray-500 text-xs font-bold ${
+                    isOpen
+                      ? "border-blue-400 text-white"
+                      : "bg-gray-800 text-gray-300"
+                  }`}
+                >
+                  {index + 1}
+                </span>
+                {annotation.action.title}
+              </button>
+              <div className={`${isOpen ? "mt-1" : "hidden"}`}>
+                {isOpen && (
+                  <div className="px-2 py-1">
+                    <div className="text-sm italic text-gray-400">
+                      <Markdown>{annotation.action.reasoning}</Markdown>
+                    </div>
+                    {annotation.action.type === "search" && (
+                      <div className="mt-2 flex items-center gap-2 text-sm text-gray-400">
+                        <SearchIcon className="size-4" />
+                        <span>{annotation.action.query}</span>
+                      </div>
+                    )}
+                    {annotation.action.type === "scrape" && (
+                      <div className="mt-2 flex items-center gap-2 text-sm text-gray-400">
+                        <LinkIcon className="size-4" />
+                        <span>
+                          {annotation.action.urls
+                            ?.map((url) => new URL(url).hostname)
+                            ?.join(", ")}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+};
 
 interface ChatMessageProps {
   message: UIMessage;
@@ -130,9 +201,30 @@ const ToolInvocation = ({ part }: { part: MessagePart }) => {
   );
 };
 
+type NewActionPart = {
+  type: "data-NEW_ACTION";
+  data: { action: OurMessageAnnotation["action"] };
+};
+
+function getReasoningAnnotations(parts: MessagePart[]): OurMessageAnnotation[] {
+  return parts
+    .filter((p): p is NewActionPart => {
+      if (p.type !== "data-NEW_ACTION" || !("data" in p)) return false;
+      const data = p.data;
+      return (
+        typeof data === "object" &&
+        data !== null &&
+        "action" in data &&
+        data.action != null
+      );
+    })
+    .map((p) => ({ type: "NEW_ACTION" as const, action: p.data.action }));
+}
+
 export const ChatMessage = ({ message, userName }: ChatMessageProps) => {
   const isAI = message.role === "assistant";
   const parts = message.parts ?? [];
+  const reasoningAnnotations = isAI ? getReasoningAnnotations(parts) : [];
 
   return (
     <div className="mb-6">
@@ -144,6 +236,10 @@ export const ChatMessage = ({ message, userName }: ChatMessageProps) => {
         <p className="mb-2 text-sm font-semibold text-gray-400">
           {isAI ? "AI" : userName}
         </p>
+
+        {isAI && reasoningAnnotations.length > 0 && (
+          <ReasoningSteps annotations={reasoningAnnotations} />
+        )}
 
         <div className="prose prose-invert max-w-none">
           {parts.map((part: MessagePart, index: number) => {

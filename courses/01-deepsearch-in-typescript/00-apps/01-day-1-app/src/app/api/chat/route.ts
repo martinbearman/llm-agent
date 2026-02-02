@@ -1,11 +1,19 @@
 import type { UIMessage } from "ai";
-import { convertToModelMessages } from "ai";
+import {
+  convertToModelMessages,
+  createUIMessageStream,
+  createUIMessageStreamResponse,
+} from "ai";
 import { Langfuse } from "langfuse";
 import { env } from "~/env";
 import { auth } from "~/server/auth";
 import type { RateLimitConfig } from "~/server/rate-limit";
 import { checkRateLimit, recordRateLimit } from "~/server/rate-limit";
-import { streamFromDeepSearch } from "~/deep-search";
+import {
+  streamFromDeepSearch,
+  type OurMessageAnnotation,
+  type OurUIMessage,
+} from "~/deep-search";
 import {
   getDailyRequestCount,
   getRequestLimitPerDay,
@@ -259,56 +267,72 @@ export async function POST(request: Request) {
 
   const modelMessages = convertToModelMessages(messagesWithoutTool);
 
-  const result = await streamFromDeepSearch({
-    messages: modelMessages,
-    telemetry: {
-      isEnabled: true,
-      functionId: "agent",
-      metadata: {
-        langfuseTraceId: trace.id,
-      },
-    },
-    onFinish: async ({ response }) => {
-      const rawResponseMessages = response.messages as unknown as UIMessage[];
+  const stream = createUIMessageStream<OurUIMessage>({
+    execute: async ({ writer }) => {
+      const result = await streamFromDeepSearch({
+        messages: modelMessages,
+        telemetry: {
+          isEnabled: true,
+          functionId: "agent",
+          metadata: {
+            langfuseTraceId: trace.id,
+          },
+        },
+        onFinish: async ({ response }) => {
+          const rawResponseMessages =
+            response.messages as unknown as UIMessage[];
 
-      // Ensure all response messages have non-null `parts` so they can be
-      // safely persisted to the database (the `parts` column is non-nullable).
-      const responseMessages: UIMessage[] = rawResponseMessages.map(
-        normalizeMessage,
-      );
+          // Ensure all response messages have non-null `parts` so they can be
+          // safely persisted to the database (the `parts` column is non-nullable).
+          const responseMessages: UIMessage[] = rawResponseMessages.map(
+            normalizeMessage,
+          );
 
-      const updatedMessages = appendResponseMessages({
-        messages,
-        responseMessages,
+          const updatedMessages = appendResponseMessages({
+            messages,
+            responseMessages,
+          });
+
+          const title = getChatTitleFromMessages(updatedMessages);
+
+          // Save the entire chat message history by replacing all existing messages
+          // with the updated messages array for this chat.
+          await upsertChat(
+            {
+              userId: user.id,
+              chatId,
+              title,
+              messages: updatedMessages,
+            },
+            trace,
+          );
+
+          // Update trace with output messages
+          trace.update({
+            output: {
+              messages: updatedMessages,
+              messageCount: updatedMessages.length,
+              title,
+            },
+          });
+
+          await langfuse.flushAsync();
+        },
+        writeMessageAnnotation: (annotation: OurMessageAnnotation) => {
+          writer.write({
+            type: "data-NEW_ACTION",
+            data: { action: annotation.action },
+          });
+        },
       });
 
-      const title = getChatTitleFromMessages(updatedMessages);
-
-      // Save the entire chat message history by replacing all existing messages
-      // with the updated messages array for this chat.
-      await upsertChat(
-        {
-          userId: user.id,
-          chatId,
-          title,
-          messages: updatedMessages,
-        },
-        trace,
-      );
-
-      // Update trace with output messages
-      trace.update({
-        output: {
-          messages: updatedMessages,
-          messageCount: updatedMessages.length,
-          title,
-        },
-      });
-
-      await langfuse.flushAsync();
+      writer.merge(result.toUIMessageStream());
     },
+    onError: (error) =>
+      `Custom error: ${error instanceof Error ? error.message : String(error)}`,
+    originalMessages: messages as OurUIMessage[],
   });
 
-  return result.toUIMessageStreamResponse();
+  return createUIMessageStreamResponse({ stream });
 }
 
