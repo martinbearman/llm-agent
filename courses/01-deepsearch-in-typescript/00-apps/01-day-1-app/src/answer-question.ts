@@ -1,5 +1,6 @@
-import { streamText, type StreamTextResult } from "ai";
+import { smoothStream, streamText, type StreamTextResult } from "ai";
 import { model } from "~/model";
+import { markdownJoinerTransform } from "~/markdown-joiner-transform";
 import type { SystemContext } from "~/system-context";
 
 const LINK_FORMATTING_RULES = `
@@ -85,6 +86,13 @@ export function answerQuestion(
   return streamText({
     model,
     system: getAnswerSystemPrompt(formattedDate, currentDate, isFinal),
+    experimental_transform: [
+      markdownJoinerTransform(),
+      smoothStream({
+        delayInMs: 200,
+        chunking: "line",
+      }),
+    ],
     prompt: `User question: ${context.getUserQuestion()}
 
 ${context.getQueryHistory()}
