@@ -269,6 +269,16 @@ export async function POST(request: Request) {
 
   const stream = createUIMessageStream<OurUIMessage>({
     execute: async ({ writer }) => {
+      const annotations: OurMessageAnnotation[] = [];
+
+      const writeMessageAnnotation = (annotation: OurMessageAnnotation) => {
+        annotations.push(annotation);
+        writer.write({
+          type: "data-NEW_ACTION",
+          data: { action: annotation.action },
+        });
+      };
+
       const result = await streamFromDeepSearch({
         messages: modelMessages,
         langfuseTraceId: trace.id,
@@ -286,6 +296,11 @@ export async function POST(request: Request) {
             messages,
             responseMessages,
           });
+
+          const lastMessage = updatedMessages[updatedMessages.length - 1];
+          if (lastMessage) {
+            (lastMessage as UIMessage & { annotations?: OurMessageAnnotation[] }).annotations = annotations;
+          }
 
           const title = getChatTitleFromMessages(updatedMessages);
 
@@ -312,12 +327,7 @@ export async function POST(request: Request) {
 
           await langfuse.flushAsync();
         },
-        writeMessageAnnotation: (annotation: OurMessageAnnotation) => {
-          writer.write({
-            type: "data-NEW_ACTION",
-            data: { action: annotation.action },
-          });
-        },
+        writeMessageAnnotation,
       });
 
       writer.merge(result.toUIMessageStream());

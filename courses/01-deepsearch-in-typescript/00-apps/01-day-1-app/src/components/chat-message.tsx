@@ -76,7 +76,7 @@ const ReasoningSteps = ({
 };
 
 interface ChatMessageProps {
-  message: UIMessage;
+  message: UIMessage & { annotations?: OurMessageAnnotation[] };
   userName: string;
 }
 
@@ -224,7 +224,11 @@ function getReasoningAnnotations(parts: MessagePart[]): OurMessageAnnotation[] {
 export const ChatMessage = ({ message, userName }: ChatMessageProps) => {
   const isAI = message.role === "assistant";
   const parts = message.parts ?? [];
-  const reasoningAnnotations = isAI ? getReasoningAnnotations(parts) : [];
+  const reasoningAnnotations: OurMessageAnnotation[] = isAI
+    ? (Array.isArray(message.annotations) && message.annotations.length > 0
+        ? message.annotations
+        : getReasoningAnnotations(parts))
+    : [];
 
   return (
     <div className="mb-6">

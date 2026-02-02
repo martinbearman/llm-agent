@@ -96,6 +96,7 @@ export const messages = createTable(
       .references(() => chats.id, { onDelete: "cascade" }),
     role: varchar("role", { length: 255 }).notNull(),
     parts: json("parts").notNull(),
+    annotations: json("annotations"),
     order: integer("order").notNull(),
   },
   (message) => ({

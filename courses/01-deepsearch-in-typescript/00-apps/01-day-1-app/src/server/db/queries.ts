@@ -166,13 +166,17 @@ export const upsertChat = async (
     });
 
     await db.insert(messages).values(
-      messageList.map((message, index) => ({
-        id: message.id ?? crypto.randomUUID(),
-        chatId,
-        role: message.role,
-        parts: message.parts,
-        order: index,
-      })),
+      messageList.map((message, index) => {
+        const msg = message as UIMessage & { annotations?: unknown };
+        return {
+          id: message.id ?? crypto.randomUUID(),
+          chatId,
+          role: message.role,
+          parts: message.parts,
+          annotations: msg.annotations ?? null,
+          order: index,
+        };
+      }),
     );
 
     insertMessagesSpan?.end({
@@ -199,11 +203,13 @@ export async function getChat(chatId: string, userId: string) {
   }
 
   // Convert database messages to AI SDK Message format
-  const formattedMessages: UIMessage[] = chat.messages.map((msg) => ({
-    id: msg.id,
-    role: msg.role as UIMessage["role"],
-    parts: msg.parts as UIMessage["parts"],
-  }));
+  const formattedMessages: (UIMessage & { annotations?: unknown })[] =
+    chat.messages.map((msg) => ({
+      id: msg.id,
+      role: msg.role as UIMessage["role"],
+      parts: msg.parts as UIMessage["parts"],
+      annotations: msg.annotations ?? [],
+    }));
 
   return {
     ...chat,
