@@ -1,6 +1,5 @@
 import {
   type StreamTextResult,
-  type TelemetrySettings,
   type UIMessage,
   convertToModelMessages,
   generateObject,
@@ -88,25 +87,26 @@ export const actionSchema = z.object({
   query: z
     .string()
     .describe(
-      "The query to search for. Required if type is 'search'.",
+      "The query to search for. Only required if type is 'search'.",
     )
     .optional(),
   urls: z
     .array(z.string())
     .describe(
-      "The URLs to scrape. Required if type is 'scrape'.",
+      "The URLs to scrape. Only required if type is 'scrape'.",
     )
     .optional(),
 });
 
 export async function streamFromDeepSearch(opts: {
+  langfuseTraceId?: string;
   messages: ModelMessage[];
   onFinish?: (args: { response: { messages: unknown[] } }) => void | Promise<void>;
-  telemetry: TelemetrySettings;
   writeMessageAnnotation?: (annotation: OurMessageAnnotation) => void;
 }): Promise<StreamTextResult<Record<string, never>, string>> {
   const userQuestion = getUserQuestionFromMessages(opts.messages);
   return runAgentLoop(userQuestion, {
+    langfuseTraceId: opts.langfuseTraceId,
     onFinish: opts.onFinish,
     writeMessageAnnotation: opts.writeMessageAnnotation,
   });
@@ -123,10 +123,7 @@ export async function askDeepSearch(messages: UIMessage[]) {
 
   const result = await streamFromDeepSearch({
     messages: modelMessages,
-    onFinish: () => {}, // just a stub
-    telemetry: {
-      isEnabled: false,
-    },
+    onFinish: () => {}, // just a stub - no langfuseTraceId so evals don't capture traces
   });
 
   // Consume the stream - without this,
@@ -176,6 +173,7 @@ function parseNextActionResult(
 
 export const getNextAction = async (
   context: SystemContext,
+  opts?: { langfuseTraceId?: string },
 ): Promise<Action> => {
   const currentDate = new Date().toISOString();
   const formattedDate = new Date().toLocaleDateString("en-US", {
@@ -188,6 +186,7 @@ export const getNextAction = async (
     timeZoneName: "short",
   });
 
+  const langfuseTraceId = opts?.langfuseTraceId;
   const result = await generateObject({
     model,
     schema: actionSchema,
@@ -200,6 +199,15 @@ Here is the context:
 ${context.getQueryHistory()}
 
 ${context.getScrapeHistory()}`,
+    ...(langfuseTraceId != null && {
+      experimental_telemetry: {
+        isEnabled: true,
+        functionId: "agent-loop-get-next-action",
+        metadata: {
+          langfuseTraceId,
+        },
+      },
+    }),
   });
 
   return parseNextActionResult(result.object);

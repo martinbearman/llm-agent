@@ -82,16 +82,18 @@ async function scrapeUrl(
 export async function runAgentLoop(
   userQuestion: string,
   opts?: {
+    langfuseTraceId?: string;
     onFinish?: (args: { response: { messages: unknown[] } }) => void | Promise<void>;
     writeMessageAnnotation?: (annotation: OurMessageAnnotation) => void;
   },
 ): Promise<StreamTextResult<Record<string, never>, string>> {
   const ctx = new SystemContext(userQuestion);
+  const langfuseTraceId = opts?.langfuseTraceId;
   const onFinish = opts?.onFinish;
   const writeMessageAnnotation = opts?.writeMessageAnnotation;
 
   while (!ctx.shouldStop()) {
-    const nextAction: Action = await getNextAction(ctx);
+    const nextAction: Action = await getNextAction(ctx, { langfuseTraceId });
 
     writeMessageAnnotation?.({
       type: "NEW_ACTION",
@@ -103,11 +105,11 @@ export async function runAgentLoop(
     } else if (nextAction.type === "scrape") {
       await scrapeUrl(ctx, nextAction.urls);
     } else if (nextAction.type === "answer") {
-      return answerQuestion(ctx, { onFinish });
+      return answerQuestion(ctx, { langfuseTraceId, onFinish });
     }
 
     ctx.incrementStep();
   }
 
-  return answerQuestion(ctx, { isFinal: true, onFinish });
+  return answerQuestion(ctx, { isFinal: true, langfuseTraceId, onFinish });
 }

@@ -271,13 +271,7 @@ export async function POST(request: Request) {
     execute: async ({ writer }) => {
       const result = await streamFromDeepSearch({
         messages: modelMessages,
-        telemetry: {
-          isEnabled: true,
-          functionId: "agent",
-          metadata: {
-            langfuseTraceId: trace.id,
-          },
-        },
+        langfuseTraceId: trace.id,
         onFinish: async ({ response }) => {
           const rawResponseMessages =
             response.messages as unknown as UIMessage[];

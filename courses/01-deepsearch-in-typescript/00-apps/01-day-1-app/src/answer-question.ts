@@ -67,10 +67,12 @@ export function answerQuestion(
   context: SystemContext,
   opts?: {
     isFinal?: boolean;
+    langfuseTraceId?: string;
     onFinish?: (args: { response: { messages: unknown[] } }) => void | Promise<void>;
   },
 ): StreamTextResult<Record<string, never>, string> {
   const isFinal = opts?.isFinal ?? false;
+  const langfuseTraceId = opts?.langfuseTraceId;
   const onFinish = opts?.onFinish;
   const currentDate = new Date().toISOString();
   const formattedDate = new Date().toLocaleDateString("en-US", {
@@ -101,5 +103,14 @@ ${context.getScrapeHistory()}
 
 Answer the user's question based on the context above. Cite sources using footnotes only (e.g. [^1] in text and [^1]: URL at the end).`,
     onFinish,
+    ...(langfuseTraceId != null && {
+      experimental_telemetry: {
+        isEnabled: true,
+        functionId: "agent-loop-answer-question",
+        metadata: {
+          langfuseTraceId,
+        },
+      },
+    }),
   });
 }
