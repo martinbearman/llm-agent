@@ -49,6 +49,7 @@ Always use footnote style for every URL.
 function getAnswerSystemPrompt(
   formattedDate: string,
   currentDate: string,
+  requestLocationPrompt: string,
   isFinal: boolean,
 ) {
   const finalNote = isFinal
@@ -58,6 +59,8 @@ function getAnswerSystemPrompt(
   return `You are a helpful AI assistant answering the user's question using the provided search and scrape context.
 
 Current date and time: ${formattedDate} (ISO: ${currentDate})
+
+${requestLocationPrompt}
 
 Your job is to answer the user's question using only the context below (search results and scraped page content). Cite sources using footnotes only (see link formatting rules below). Be comprehensive and accurate based on the context.
 ${LINK_FORMATTING_RULES}${finalNote}`;
@@ -87,7 +90,12 @@ export function answerQuestion(
 
   return streamText({
     model,
-    system: getAnswerSystemPrompt(formattedDate, currentDate, isFinal),
+    system: getAnswerSystemPrompt(
+      formattedDate,
+      currentDate,
+      context.getRequestLocationPrompt(),
+      isFinal,
+    ),
     experimental_transform: [
       markdownJoinerTransform(),
       smoothStream({

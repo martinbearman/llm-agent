@@ -15,6 +15,13 @@ export type ScrapeResult = {
   result: string;
 };
 
+export type RequestLocation = {
+  latitude?: string;
+  longitude?: string;
+  city?: string;
+  country?: string;
+};
+
 const toQueryResult = (
   query: QueryResultSearchResult,
 ) =>
@@ -41,6 +48,11 @@ export class SystemContext {
   private readonly conversationHistory: string;
 
   /**
+   * Hints about the user's request location (derived from IP).
+   */
+  private readonly requestLocation: RequestLocation;
+
+  /**
    * The history of all queries searched
    */
   private queryHistory: QueryResult[] = [];
@@ -50,9 +62,14 @@ export class SystemContext {
    */
   private scrapeHistory: ScrapeResult[] = [];
 
-  constructor(userQuestion = "", conversationHistory = "") {
+  constructor(
+    userQuestion = "",
+    conversationHistory = "",
+    requestLocation: RequestLocation = {},
+  ) {
     this.userQuestion = userQuestion;
     this.conversationHistory = conversationHistory;
+    this.requestLocation = requestLocation;
   }
 
   getStep() {
@@ -69,6 +86,18 @@ export class SystemContext {
 
   getConversationHistory(): string {
     return this.conversationHistory;
+  }
+
+  getRequestLocationPrompt(): string {
+    const normalize = (value?: string) =>
+      value && value.trim().length > 0 ? value : "unknown";
+    const { latitude, longitude, city, country } = this.requestLocation;
+
+    return `About the origin of the user's request:
+- lat: ${normalize(latitude)}
+- lon: ${normalize(longitude)}
+- city: ${normalize(city)}
+- country: ${normalize(country)}`;
   }
 
   shouldStop() {

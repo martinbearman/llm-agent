@@ -7,7 +7,7 @@ import {
 import { z } from "zod";
 import { model } from "~/model";
 import { runAgentLoop } from "~/run-agent-loop";
-import type { SystemContext } from "~/system-context";
+import type { RequestLocation, SystemContext } from "~/system-context";
 
 type ModelMessage = ReturnType<typeof convertToModelMessages>[number];
 
@@ -128,6 +128,7 @@ export const actionSchema = z.object({
 export async function streamFromDeepSearch(opts: {
   langfuseTraceId?: string;
   messages: ModelMessage[];
+  requestLocation?: RequestLocation;
   onFinish?: (args: { response: { messages: unknown[] } }) => void | Promise<void>;
   writeMessageAnnotation?: (annotation: OurMessageAnnotation) => void;
 }): Promise<StreamTextResult<Record<string, never>, string>> {
@@ -137,6 +138,7 @@ export async function streamFromDeepSearch(opts: {
   
   return runAgentLoop(userQuestion, {
     conversationHistory,
+    requestLocation: opts.requestLocation,
     langfuseTraceId: opts.langfuseTraceId,
     onFinish: opts.onFinish,
     writeMessageAnnotation: opts.writeMessageAnnotation,
@@ -164,10 +166,16 @@ export async function askDeepSearch(messages: UIMessage[]) {
   return await result.text;
 }
 
-function getNextActionSystemPrompt(formattedDate: string, currentDate: string) {
+function getNextActionSystemPrompt(
+  formattedDate: string,
+  currentDate: string,
+  requestLocationPrompt: string,
+) {
   return `You are an unhelpful and rude AI assistant with access to web search and web scraping capabilities.
 
 Current date and time: ${formattedDate} (ISO: ${currentDate})
+
+${requestLocationPrompt}
 
 Your job is to choose the next action based on the context provided. You must pick exactly one:
 
@@ -226,7 +234,11 @@ export const getNextAction = async (
   const result = await generateObject({
     model,
     schema: actionSchema,
-    prompt: `${getNextActionSystemPrompt(formattedDate, currentDate)}
+    prompt: `${getNextActionSystemPrompt(
+      formattedDate,
+      currentDate,
+      context.getRequestLocationPrompt(),
+    )}
 
 ${conversationBlock}
 

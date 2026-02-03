@@ -22,10 +22,40 @@ import {
   insertRequestLog,
   upsertChat,
 } from "~/server/db/queries";
+import type { RequestLocation } from "~/system-context";
 
 const langfuse = new Langfuse({
   environment: env.NODE_ENV,
 });
+
+function getRequestLocationFromHeaders(request: Request): RequestLocation {
+  const headers = request.headers;
+
+  return {
+    latitude: headers.get("x-vercel-ip-latitude") ?? undefined,
+    longitude: headers.get("x-vercel-ip-longitude") ?? undefined,
+    city: headers.get("x-vercel-ip-city") ?? undefined,
+    country: headers.get("x-vercel-ip-country") ?? undefined,
+  };
+}
+
+function getRequestLocation(request: Request): RequestLocation {
+  let requestForGeo = request;
+
+  if (process.env.NODE_ENV === "development") {
+    const headers = new Headers(request.headers);
+    headers.set("x-vercel-ip-country", "UK");
+    headers.set("x-vercel-ip-country-region", "GB");
+    headers.set("x-vercel-ip-city", "Chelmsford");
+
+    requestForGeo = new Request(request.url, {
+      method: request.method,
+      headers,
+    });
+  }
+
+  return getRequestLocationFromHeaders(requestForGeo);
+}
 
 function appendResponseMessages({
   messages,
@@ -108,6 +138,8 @@ export async function POST(request: Request) {
   if (!user) {
     return new Response("Unauthorized", { status: 401 });
   }
+
+  const requestLocation = getRequestLocation(request);
 
   const body = (await request.json()) as {
     messages: Array<UIMessage>;
@@ -263,6 +295,7 @@ export async function POST(request: Request) {
 
       const result = await streamFromDeepSearch({
         messages: modelMessages,
+        requestLocation,
         langfuseTraceId: trace.id,
         onFinish: async ({ response }) => {
           const rawResponseMessages =

@@ -5,6 +5,7 @@ import { crawlMultipleUrls } from "~/server/scraper";
 import {
   type QueryResult,
   type QueryResultSearchResult,
+  type RequestLocation,
   type ScrapeResult,
   SystemContext,
 } from "~/system-context";
@@ -83,6 +84,7 @@ export async function runAgentLoop(
   userQuestion: string,
   opts?: {
     conversationHistory?: string;
+    requestLocation?: RequestLocation;
     langfuseTraceId?: string;
     onFinish?: (args: { response: { messages: unknown[] } }) => void | Promise<void>;
     writeMessageAnnotation?: (annotation: OurMessageAnnotation) => void;
@@ -91,6 +93,7 @@ export async function runAgentLoop(
   const ctx = new SystemContext(
     userQuestion,
     opts?.conversationHistory ?? "",
+    opts?.requestLocation ?? {},
   );
   const langfuseTraceId = opts?.langfuseTraceId;
   const onFinish = opts?.onFinish;
