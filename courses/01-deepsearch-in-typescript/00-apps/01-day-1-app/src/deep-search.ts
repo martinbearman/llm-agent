@@ -67,13 +67,6 @@ export interface SearchAction {
   query: string;
 }
 
-export interface ScrapeAction {
-  type: "scrape";
-  title: string;
-  reasoning: string;
-  urls: string[];
-}
-
 export interface AnswerAction {
   type: "answer";
   title: string;
@@ -82,7 +75,6 @@ export interface AnswerAction {
 
 export type Action =
   | SearchAction
-  | ScrapeAction
   | AnswerAction;
 
 export type OurMessageAnnotation = {
@@ -104,23 +96,16 @@ export const actionSchema = z.object({
     ),
   reasoning: z.string().describe("The reason you chose this step."),
   type: z
-    .enum(["search", "scrape", "answer"])
+    .enum(["search", "answer"])
     .describe(
       `The type of action to take.
-      - 'search': Search the web for more information.
-      - 'scrape': Scrape a URL.
+      - 'search': Search the web for more information. This will automatically scrape the URLs from the search results.
       - 'answer': Answer the user's question and complete the loop.`,
     ),
   query: z
     .string()
     .describe(
       "The query to search for. Only required if type is 'search'.",
-    )
-    .optional(),
-  urls: z
-    .array(z.string())
-    .describe(
-      "The URLs to scrape. Only required if type is 'scrape'.",
     )
     .optional(),
 });
@@ -171,7 +156,7 @@ function getNextActionSystemPrompt(
   currentDate: string,
   requestLocationPrompt: string,
 ) {
-  return `You are an unhelpful and rude AI assistant with access to web search and web scraping capabilities.
+  return `You are a helpful and friendly AI assistant with access to web search capabilities.
 
 Current date and time: ${formattedDate} (ISO: ${currentDate})
 
@@ -179,11 +164,10 @@ ${requestLocationPrompt}
 
 Your job is to choose the next action based on the context provided. You must pick exactly one:
 
-- **search**: Use when you need more information. Provide a clear, specific query. For current events or up-to-date data, search first. Consider publication dates and recency.
-- **scrape**: Use when you have search results with URLs that need full page content. Provide a diverse set of high-signal URLs (e.g. from different domains: news, docs, blogs). Prefer scraping multiple relevant URLs when available.
-- **answer**: Use when you have enough information from search and scraped content to answer the user's question. You will then cite sources with markdown links and complete the loop.
+- **search**: Use when you need more information. Provide a clear, specific query. For current events or up-to-date data, search first. Consider publication dates and recency. When you search, the system will automatically scrape the URLs from the search results to provide you with full page content.
+- **answer**: Use when you have enough information from search results and their scraped content to answer the user's question. You will then cite sources with markdown links and complete the loop.
 
-Choose 'answer' only when the context already contains enough search and scrape results to give a comprehensive, well-sourced response.`;
+Choose 'answer' only when the context already contains enough search results with scraped content to give a comprehensive, well-sourced response.`;
 }
 
 function parseNextActionResult(
@@ -197,14 +181,6 @@ function parseNextActionResult(
       title,
       reasoning,
       query: raw.query ?? "",
-    };
-  }
-  if (raw.type === "scrape") {
-    return {
-      type: "scrape",
-      title,
-      reasoning,
-      urls: raw.urls ?? [],
     };
   }
   return { type: "answer", title, reasoning };
@@ -244,9 +220,7 @@ ${conversationBlock}
 
 Here is the context:
 
-${context.getQueryHistory()}
-
-${context.getScrapeHistory()}`,
+${context.getSearchHistory()}`,
     ...(langfuseTraceId != null && {
       experimental_telemetry: {
         isEnabled: true,

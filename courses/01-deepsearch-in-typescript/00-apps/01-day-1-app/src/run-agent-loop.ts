@@ -3,10 +3,9 @@ import { env } from "~/env";
 import { searchSerper } from "~/serper";
 import { crawlMultipleUrls } from "~/server/scraper";
 import {
-  type QueryResult,
-  type QueryResultSearchResult,
   type RequestLocation,
-  type ScrapeResult,
+  type SearchHistoryEntry,
+  type SearchResult,
   SystemContext,
 } from "~/system-context";
 import {
@@ -17,63 +16,61 @@ import {
 import { answerQuestion } from "~/answer-question";
 
 /**
- * Search the web and report results into the context.
- * Logic copied from deep-search.ts searchWeb tool execute.
+ * Search the web and automatically scrape the URLs from the search results.
+ * This combines the previous search and scrape actions into a single deterministic action.
  */
 async function searchWeb(
   context: SystemContext,
   query: string,
 ): Promise<void> {
+  // Step 1: Search the web
   const results = await searchSerper(
     { q: query, num: env.SEARCH_RESULTS_COUNT },
     undefined,
   );
 
-  const queryResults: QueryResultSearchResult[] = results.organic.map(
-    (result) => ({
+  // Extract URLs from search results
+  const urls = results.organic.map((result) => result.link);
+
+  // Step 2: Automatically scrape all URLs from the search results
+  let scrapedResults: Array<{ url: string; content: string }> = [];
+  
+  try {
+    const crawlResult = await crawlMultipleUrls(urls);
+    scrapedResults = crawlResult.results.map(({ url, result }) => ({
+      url,
+      content:
+        result.success === true
+          ? result.data
+          : (result as { success: false; error: string }).error,
+    }));
+  } catch (error) {
+    // If scraping fails, create error entries for all URLs
+    scrapedResults = urls.map((url) => ({
+      url,
+      content:
+        error instanceof Error ? error.message : "Unknown error occurred",
+    }));
+  }
+
+  // Step 3: Combine search results with scraped content
+  const searchResults: SearchResult[] = results.organic.map((result) => {
+    const scraped = scrapedResults.find((s) => s.url === result.link);
+    return {
       title: result.title,
       url: result.link,
       snippet: result.snippet,
       date: result.date ?? "",
-    }),
-  );
+      scrapedContent: scraped?.content ?? "",
+    };
+  });
 
-  const queryResult: QueryResult = {
+  // Step 4: Report the combined search entry
+  const searchEntry: SearchHistoryEntry = {
     query,
-    results: queryResults,
+    results: searchResults,
   };
-  context.reportQueries([queryResult]);
-}
-
-/**
- * Scrape the given URLs and report results into the context.
- * Logic copied from deep-search.ts scrapePages tool execute.
- */
-async function scrapeUrl(
-  context: SystemContext,
-  urls: string[],
-): Promise<void> {
-  try {
-    const crawlResult = await crawlMultipleUrls(urls);
-
-    const scrapes: ScrapeResult[] = crawlResult.results.map(
-      ({ url, result }) => ({
-        url,
-        result:
-          result.success === true
-            ? result.data
-            : (result as { success: false; error: string }).error,
-      }),
-    );
-    context.reportScrapes(scrapes);
-  } catch (error) {
-    const scrapes: ScrapeResult[] = urls.map((url) => ({
-      url,
-      result:
-        error instanceof Error ? error.message : "Unknown error occurred",
-    }));
-    context.reportScrapes(scrapes);
-  }
+  context.reportSearch(searchEntry);
 }
 
 /**
@@ -109,8 +106,6 @@ export async function runAgentLoop(
 
     if (nextAction.type === "search") {
       await searchWeb(ctx, nextAction.query);
-    } else if (nextAction.type === "scrape") {
-      await scrapeUrl(ctx, nextAction.urls);
     } else if (nextAction.type === "answer") {
       return answerQuestion(ctx, { langfuseTraceId, onFinish });
     }

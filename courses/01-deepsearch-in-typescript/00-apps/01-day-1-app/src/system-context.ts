@@ -1,3 +1,17 @@
+export type SearchResult = {
+  date: string;
+  title: string;
+  url: string;
+  snippet: string;
+  scrapedContent: string;
+};
+
+export type SearchHistoryEntry = {
+  query: string;
+  results: SearchResult[];
+};
+
+// Legacy types kept for backward compatibility during migration
 export type QueryResultSearchResult = {
   date: string;
   title: string;
@@ -22,15 +36,6 @@ export type RequestLocation = {
   country?: string;
 };
 
-const toQueryResult = (
-  query: QueryResultSearchResult,
-) =>
-  [
-    `### ${query.date} - ${query.title}`,
-    query.url,
-    query.snippet,
-  ].join("\n\n");
-
 export class SystemContext {
   /**
    * The current step in the loop
@@ -53,14 +58,9 @@ export class SystemContext {
   private readonly requestLocation: RequestLocation;
 
   /**
-   * The history of all queries searched
+   * The history of all searches, including their scraped content
    */
-  private queryHistory: QueryResult[] = [];
-
-  /**
-   * The history of all URLs scraped
-   */
-  private scrapeHistory: ScrapeResult[] = [];
+  private searchHistory: SearchHistoryEntry[] = [];
 
   constructor(
     userQuestion = "",
@@ -104,36 +104,80 @@ export class SystemContext {
     return this.step >= 10;
   }
 
+  reportSearch(search: SearchHistoryEntry) {
+    this.searchHistory.push(search);
+  }
+
+  getSearchHistory(): string {
+    return this.searchHistory
+      .map((search) =>
+        [
+          `## Query: "${search.query}"`,
+          ...search.results.map((result) =>
+            [
+              `### ${result.date} - ${result.title}`,
+              result.url,
+              result.snippet,
+              `<scrape_result>`,
+              result.scrapedContent,
+              `</scrape_result>`,
+            ].join("\n\n"),
+          ),
+        ].join("\n\n"),
+      )
+      .join("\n\n");
+  }
+
+  // Legacy methods for backward compatibility - delegate to new methods
   reportQueries(queries: QueryResult[]) {
-    this.queryHistory.push(...queries);
+    // Convert legacy QueryResult to SearchHistoryEntry
+    const searchEntries: SearchHistoryEntry[] = queries.map((query) => ({
+      query: query.query,
+      results: query.results.map((result) => ({
+        ...result,
+        scrapedContent: "", // Empty scraped content for legacy queries
+      })),
+    }));
+    this.searchHistory.push(...searchEntries);
   }
 
   reportScrapes(scrapes: ScrapeResult[]) {
-    this.scrapeHistory.push(...scrapes);
+    // For legacy scrapes, we need to match them to existing search results
+    // This is a best-effort approach - ideally scrapes should be reported with their search query
+    scrapes.forEach((scrape) => {
+      // Find the most recent search entry and try to match the URL
+      for (let i = this.searchHistory.length - 1; i >= 0; i--) {
+        const entry = this.searchHistory[i];
+        if (entry) {
+          const result = entry.results.find((r) => r.url === scrape.url);
+          if (result) {
+            result.scrapedContent = scrape.result;
+            return;
+          }
+        }
+      }
+      // If no match found, create a new entry (this shouldn't happen in normal flow)
+      this.searchHistory.push({
+        query: `Scrape: ${scrape.url}`,
+        results: [
+          {
+            date: "",
+            title: "",
+            url: scrape.url,
+            snippet: "",
+            scrapedContent: scrape.result,
+          },
+        ],
+      });
+    });
   }
 
   getQueryHistory(): string {
-    return this.queryHistory
-      .map((query) =>
-        [
-          `## Query: "${query.query}"`,
-          ...query.results.map(toQueryResult),
-        ].join("\n\n"),
-      )
-      .join("\n\n");
+    return this.getSearchHistory();
   }
 
   getScrapeHistory(): string {
-    return this.scrapeHistory
-      .map((scrape) =>
-        [
-          `## Scrape: "${scrape.url}"`,
-          `<scrape_result>`,
-          scrape.result,
-          `</scrape_result>`,
-        ].join("\n\n"),
-      )
-      .join("\n\n");
+    return this.getSearchHistory();
   }
 }
 

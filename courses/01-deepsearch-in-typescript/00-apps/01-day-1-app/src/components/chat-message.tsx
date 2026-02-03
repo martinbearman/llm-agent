@@ -1,5 +1,5 @@
 import type { UIMessage } from "ai";
-import { Link as LinkIcon, Search as SearchIcon } from "lucide-react";
+import { Search as SearchIcon } from "lucide-react";
 import { useState } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -52,16 +52,6 @@ const ReasoningSteps = ({
                       <div className="mt-2 flex items-center gap-2 text-sm text-gray-400">
                         <SearchIcon className="size-4" />
                         <span>{annotation.action.query}</span>
-                      </div>
-                    )}
-                    {annotation.action.type === "scrape" && (
-                      <div className="mt-2 flex items-center gap-2 text-sm text-gray-400">
-                        <LinkIcon className="size-4" />
-                        <span>
-                          {annotation.action.urls
-                            ?.map((url) => new URL(url).hostname)
-                            ?.join(", ")}
-                        </span>
                       </div>
                     )}
                   </div>

@@ -109,9 +109,7 @@ export function answerQuestion(
         : `User question: ${context.getUserQuestion()}`
     }
 
-${context.getQueryHistory()}
-
-${context.getScrapeHistory()}
+${context.getSearchHistory()}
 
 Answer the user's question based on the context above. Cite sources using footnotes only (e.g. [^1] in text and [^1]: URL at the end).`,
     onFinish,

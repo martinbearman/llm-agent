@@ -33,7 +33,7 @@ export const env = createEnv({
       .enum(["development", "test", "production"])
       .default("development"),
     REQUESTS_PER_DAY_LIMIT: z.coerce.number().int().nonnegative().default(25),
-    SEARCH_RESULTS_COUNT: z.coerce.number().int().positive().default(10),
+    SEARCH_RESULTS_COUNT: z.coerce.number().int().positive().default(3),
     SCRAPE_URLS_COUNT: z.coerce.number().int().positive().default(5),
     EVAL_DATASET: z.enum(["dev", "ci", "regression"]).default("dev"),
   },
