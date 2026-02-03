@@ -49,7 +49,7 @@ export const upsertChat = async (
   opts: {
     userId: string;
     chatId: string;
-    title: string;
+    title?: string;
     messages: UIMessage[];
   },
   trace?: {
@@ -62,6 +62,7 @@ export const upsertChat = async (
   },
 ) => {
   const { userId, chatId, title, messages: messageList } = opts;
+  const effectiveTitle = title ?? "New Chat";
 
   // Check if chat exists (regardless of user)
   const findChatSpan = trace?.span({
@@ -106,19 +107,19 @@ export const upsertChat = async (
       },
     });
 
-    // Update chat title and updatedAt
+    // Update chat title (if provided) and updatedAt
     const updateChatSpan = trace?.span({
       name: "update-chat",
       input: {
         chatId,
-        title,
+        title: title ?? "(unchanged)",
       },
     });
 
     await db
       .update(chats)
       .set({
-        title,
+        ...(title !== undefined && { title }),
         updatedAt: new Date(),
       })
       .where(eq(chats.id, chatId));
@@ -135,14 +136,14 @@ export const upsertChat = async (
       input: {
         chatId,
         userId,
-        title,
+        title: effectiveTitle,
       },
     });
 
     await db.insert(chats).values({
       id: chatId,
       userId,
-      title,
+      title: effectiveTitle,
       createdAt: new Date(),
       updatedAt: new Date(),
     });

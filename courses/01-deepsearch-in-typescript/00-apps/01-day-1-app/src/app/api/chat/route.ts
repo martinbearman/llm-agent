@@ -14,6 +14,7 @@ import {
   type OurMessageAnnotation,
   type OurUIMessage,
 } from "~/deep-search";
+import { generateChatTitle } from "~/generate-chat-title";
 import {
   getDailyRequestCount,
   getRequestLimitPerDay,
@@ -130,30 +131,13 @@ export async function POST(request: Request) {
     },
   });
 
-  const getChatTitleFromMessages = (allMessages: Array<UIMessage>): string => {
-    const firstUserMessage = allMessages.find(
-      (message) => message.role === "user",
-    );
+  let titlePromise: Promise<string>;
 
-    if (!firstUserMessage) {
-      return "New Chat";
-    }
-
-    // Messages in this app use parts with text content
-    const textPart = firstUserMessage.parts?.find(
-      (part) => part.type === "text" && "text" in part,
-    ) as { type: "text"; text: string } | undefined;
-
-    const titleText = textPart?.text.trim();
-
-    if (!titleText) {
-      return "New Chat";
-    }
-
-    return titleText.length > 100
-      ? `${titleText.slice(0, 100)}...`
-      : titleText;
-  };
+  if (isNewChat) {
+    titlePromise = generateChatTitle(messages);
+  } else {
+    titlePromise = Promise.resolve("");
+  }
 
   if (!user.isAdmin) {
     const dailyLimit = getRequestLimitPerDay();
@@ -246,13 +230,11 @@ export async function POST(request: Request) {
   // If this is a brand new chat, create it immediately
   // so that we have it persisted even if the stream is cancelled or fails.
   if (isNewChat) {
-    const initialTitle = getChatTitleFromMessages(messages);
-
     await upsertChat(
       {
         userId: user.id,
         chatId,
-        title: initialTitle,
+        title: "Generating...",
         messages,
       },
       trace,
@@ -302,7 +284,7 @@ export async function POST(request: Request) {
             (lastMessage as UIMessage & { annotations?: OurMessageAnnotation[] }).annotations = annotations;
           }
 
-          const title = getChatTitleFromMessages(updatedMessages);
+          const title = await titlePromise;
 
           // Save the entire chat message history by replacing all existing messages
           // with the updated messages array for this chat.
@@ -310,8 +292,8 @@ export async function POST(request: Request) {
             {
               userId: user.id,
               chatId,
-              title,
               messages: updatedMessages,
+              ...(title ? { title } : {}),
             },
             trace,
           );
@@ -321,7 +303,7 @@ export async function POST(request: Request) {
             output: {
               messages: updatedMessages,
               messageCount: updatedMessages.length,
-              title,
+              title: title || "(unchanged)",
             },
           });
 
