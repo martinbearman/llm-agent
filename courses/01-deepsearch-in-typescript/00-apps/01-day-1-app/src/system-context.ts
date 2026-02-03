@@ -4,6 +4,8 @@ export type SearchResult = {
   url: string;
   snippet: string;
   scrapedContent: string;
+  /** Summarized content from the URL - used instead of scrapedContent in context */
+  summary?: string;
 };
 
 export type SearchHistoryEntry = {
@@ -113,16 +115,19 @@ export class SystemContext {
       .map((search) =>
         [
           `## Query: "${search.query}"`,
-          ...search.results.map((result) =>
-            [
+          ...search.results.map((result) => {
+            // Use summary if available, otherwise fall back to scraped content
+            const content = result.summary ?? result.scrapedContent;
+            const contentTag = result.summary ? "summary" : "scrape_result";
+            return [
               `### ${result.date} - ${result.title}`,
               result.url,
               result.snippet,
-              `<scrape_result>`,
-              result.scrapedContent,
-              `</scrape_result>`,
-            ].join("\n\n"),
-          ),
+              `<${contentTag}>`,
+              content,
+              `</${contentTag}>`,
+            ].join("\n\n");
+          }),
         ].join("\n\n"),
       )
       .join("\n\n");

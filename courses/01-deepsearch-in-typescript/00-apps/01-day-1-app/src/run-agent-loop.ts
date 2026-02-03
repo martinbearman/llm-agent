@@ -14,6 +14,7 @@ import {
   type OurMessageAnnotation,
 } from "~/deep-search";
 import { answerQuestion } from "~/answer-question";
+import { summarizeURLs, type SummarizeURLInput } from "~/summarize-url";
 
 /**
  * Search the web and automatically scrape the URLs from the search results.
@@ -22,6 +23,7 @@ import { answerQuestion } from "~/answer-question";
 async function searchWeb(
   context: SystemContext,
   query: string,
+  opts?: { langfuseTraceId?: string },
 ): Promise<void> {
   // Step 1: Search the web
   const results = await searchSerper(
@@ -53,8 +55,27 @@ async function searchWeb(
     }));
   }
 
-  // Step 3: Combine search results with scraped content
-  const searchResults: SearchResult[] = results.organic.map((result) => {
+  // Step 3: Summarize all scraped content in parallel
+  const summarizeInputs: SummarizeURLInput[] = results.organic.map((result) => {
+    const scraped = scrapedResults.find((s) => s.url === result.link);
+    return {
+      conversationHistory: context.getConversationHistory(),
+      userQuestion: context.getUserQuestion(),
+      scrapedContent: scraped?.content ?? "",
+      url: result.link,
+      title: result.title,
+      snippet: result.snippet,
+      date: result.date ?? "",
+      query,
+    };
+  });
+
+  const summaries = await summarizeURLs(summarizeInputs, {
+    langfuseTraceId: opts?.langfuseTraceId,
+  });
+
+  // Step 4: Combine search results with scraped content and summaries
+  const searchResults: SearchResult[] = results.organic.map((result, index) => {
     const scraped = scrapedResults.find((s) => s.url === result.link);
     return {
       title: result.title,
@@ -62,10 +83,11 @@ async function searchWeb(
       snippet: result.snippet,
       date: result.date ?? "",
       scrapedContent: scraped?.content ?? "",
+      summary: summaries[index],
     };
   });
 
-  // Step 4: Report the combined search entry
+  // Step 5: Report the combined search entry
   const searchEntry: SearchHistoryEntry = {
     query,
     results: searchResults,
@@ -105,7 +127,7 @@ export async function runAgentLoop(
     } satisfies OurMessageAnnotation);
 
     if (nextAction.type === "search") {
-      await searchWeb(ctx, nextAction.query);
+      await searchWeb(ctx, nextAction.query, { langfuseTraceId });
     } else if (nextAction.type === "answer") {
       return answerQuestion(ctx, { langfuseTraceId, onFinish });
     }
